@@ -136,13 +136,15 @@ function passesEngagement(p: XPost, settings: Settings): boolean {
   return p.metrics.likes >= settings.minLikes && (!settings.minViews || (p.metrics.views ?? 0) >= settings.minViews);
 }
 
-/** Engagement per hour, so fast-rising posts beat old viral ones. */
-export function scorePost(post: XPost, trusted: Set<string>): number {
+/**
+ * How well the post performed: engagement per hour, so fast-rising posts beat old viral ones.
+ * Account size plays no part.
+ */
+export function scorePost(post: XPost): number {
   const m = post.metrics;
   const engagement = m.likes + 2 * m.reposts + 3 * m.quotes + 0.5 * m.replies + m.bookmarks + (m.views ?? 0) / 1000;
   const ageHours = post.createdAt ? Math.max(0, (Date.now() - post.createdAt.getTime()) / 3600_000) : 24;
-  const bonus = trusted.has(post.authorHandle.toLowerCase()) ? 1.5 : 1;
-  return Math.round((engagement / Math.pow(ageHours + 2, 1.2)) * bonus * 10) / 10;
+  return Math.round((engagement / Math.pow(ageHours + 2, 1.2)) * 10) / 10;
 }
 
 async function xSearchCandidates(topic: Topic, settings: Settings, warn: (m: string) => void): Promise<Candidate[]> {
@@ -162,13 +164,12 @@ async function xSearchCandidates(topic: Topic, settings: Settings, warn: (m: str
       warn(`X search "${query.slice(0, 60)}…": ${e instanceof Error ? e.message : e}`);
     }
   }
-  const trusted = new Set(handles.map((h) => h.toLowerCase()));
   return (
     posts
       .filter((p) => !p.isReply)
-      // Same bar for everyone: accounts you watch only rank higher among posts that pass
+      // Same bar for every post, whoever posted it
       .filter((p) => passesEngagement(p, settings))
-      .map((p) => ({ post: p, score: scorePost(p, trusted) }))
+      .map((p) => ({ post: p, score: scorePost(p) }))
       .sort((a, b) => b.score - a.score)
       .slice(0, settings.candidatesPerTopic)
       .map(({ post }) => fromXPost(post, "x_search", topic.id))

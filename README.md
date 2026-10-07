@@ -206,7 +206,7 @@ The app asks only for read access: `tweet.read`, `users.read`, `bookmark.read`, 
 
 ## 🎯 Add your topics
 
-Go to **Settings → Topics** and add one card per thing you post about. Then press **✨ Improve with AI**: Claude searches the web for good keywords, popular X accounts and RSS feeds, the app **tests every feed** and **checks every account exists** (about $0.01 per account), and the good ones are added to the topic. You can edit everything afterwards.
+Go to **Settings → Topics** and add one card per thing you post about. Then press **✨ Improve with AI**: Claude searches the web for good keywords, X accounts whose posts get high engagement (any account size) and RSS feeds, the app **tests every feed** and **checks every account exists** (about $0.01 per account), and the good ones are added to the topic. You can edit everything afterwards.
 
 | Field | What to put in | Example |
 |---|---|---|
@@ -217,7 +217,7 @@ Go to **Settings → Topics** and add one card per thing you post about. Then pr
 | **X accounts to watch** | X handles whose posts matter for this topic (used by X search) | `OpenAI`<br>`sama`<br>`OpenAIDevs` |
 
 > [!TIP]
-> For X search, **accounts to watch are the key.** X's API has no "popular only" filter, so a keyword search mostly returns posts with a handful of likes, and the app drops anything below your minimum. Posts from the accounts you watch are popular by nature.
+> **Post performance is what counts, not account size.** Every X post, from keyword search or from accounts you watch, must reach your **Min likes**. Account size plays no part in ranking. Accounts to watch help because creators who regularly get high engagement produce more posts that pass.
 
 **Topic ideas:** `OpenAI` · `Anthropic & Claude` · `Google Gemini` · `Open-source models` · `AI agents` · `AI image & video`
 

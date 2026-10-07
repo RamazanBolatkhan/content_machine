@@ -318,7 +318,7 @@ Each AI or hand edit creates a new version, so changes can be undone.
 
 - Prompts no longer assume AI news. The judge sees each topic's name, keywords and **description** (new `topics.description`), and web search uses the description too.
 - **Find** scores up to `candidatesPerTopic` (max 100) items per topic: the judge runs in batches of 20 and doesn't write. Items it recommends are saved as `new`, the others as `rejected` (still visible). Only one item per story is kept. Pictures are fetched/downloaded only for recommended items, 6 at a time. Writing happens on demand (**Write it** → `writeMissingLanguages`). Bookmarks are still written immediately.
-- **Improve with AI** (`src/lib/agents/topic-setup.ts`): Claude (WebSearch) suggests keywords, accounts and feeds. Feeds must load, have items and have been updated in the last 60 days. Accounts are looked up on X (`/2/users/by`, ~$0.01 each) and need ≥5k followers. Good ones are merged into the topic.
+- **Improve with AI** (`src/lib/agents/topic-setup.ts`): Claude (WebSearch) suggests keywords, accounts and feeds. Feeds must load, have items and have been updated in the last 60 days. Accounts are looked up on X (`/2/users/by`, ~$0.01 each) and only need to exist (no follower minimum since 2026-10-07: post performance matters, not account size). Good ones are merged into the topic.
 - Keyword X queries are capped at ~400 characters (X query length limit).
 - **Verified on Psychology:** Improve added 13 keywords, 12 accounts and 5 feeds in 19 s. Find then read 207 items → 57 fresh → 54 saved (25 recommended) in 78 s, about $0.30 of X reads.
 
@@ -346,3 +346,10 @@ Each AI or hand edit creates a new version, so changes can be undone.
 - **Auth:** `APP_PASSWORD` (Vercel env) → `src/proxy.ts` requires a cookie (SHA-256 of the password), `/login` sets it, API answers 401. Locally (no APP_PASSWORD) the site is open. X login stays local (callback 127.0.0.1); its tokens are in Postgres, so the worker uses them.
 - **Production:** https://content-machine-henna-sigma.vercel.app (Vercel project `content-machine`).
 - **Verified:** migrations + import; a real "write" job ran end to end in 10 s; the live site redirects to /login, pages load with the cookie, the API returns 401 without it, and the worker shows offline when stopped.
+
+## 20. Ranking by post performance only (2026-10-07)
+
+- The owner cares about how well a post performed, not how big the account is.
+- Every X post (keyword search, accounts to watch, "Find like my top posts") must reach **Min likes** (and Min views when set).
+- `scorePost` no longer gives watched accounts a bonus. Improve with AI has no follower minimum and asks Claude for accounts whose posts get high engagement, any size.
+- The judge sees likes, reposts, replies, views and hours old, and must rate low-engagement X posts ≤4.

@@ -84,9 +84,7 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
               </>
             ) : (
               <>
-                <Status>
-                  Offline{worker.lastSeen ? ` (last seen ${worker.lastSeen.toLocaleString()})` : ""}
-                </Status>
+                <Status>Offline{worker.lastSeen ? ` (last seen ${worker.lastSeen.toLocaleString()})` : ""}</Status>
                 <p className="t-small text-muted">
                   Searching, writing and AI edits run on your Mac. Start it with <code>npm run dev</code> (or{" "}
                   <code>npm run worker</code>) in the project folder. Until then, jobs wait in the queue.
@@ -501,7 +499,7 @@ function TopicForm({ topic }: { topic?: Topic }) {
         <TopicField
           id={`accounts${suffix}`}
           label="X accounts to watch"
-          hint="One handle per line. Their posts are almost always popular; keyword search alone mostly finds posts with few likes."
+          hint="One handle per line, any account size. X search reads their recent posts and keeps only those that performed well (Min likes)."
         >
           <textarea
             key={topic?.trustedAccounts}
@@ -538,8 +536,9 @@ function TopicForm({ topic }: { topic?: Topic }) {
         <div className="divider pt-6">
           <ImproveTopicButton topicId={topic.id} />
           <p className="field-hint">
-            Claude searches the web for keywords, popular X accounts and RSS feeds. The app checks every feed works and
-            every account exists (about $0.01 per account), then adds the good ones. Save your own edits first.
+            Claude searches the web for keywords, X accounts whose posts get high engagement, and RSS feeds. The app
+            checks every feed works and every account exists (about $0.01 per account), then adds the good ones. Save
+            your own edits first.
           </p>
         </div>
       ) : (

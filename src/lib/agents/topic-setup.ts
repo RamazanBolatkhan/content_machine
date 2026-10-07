@@ -12,7 +12,7 @@ const suggestionSchema = z.object({
   keywords: z.array(z.string()).describe("8–15 search terms people actually use for this topic, most important first"),
   accounts: z
     .array(z.object({ handle: z.string().describe("X handle without @"), why: z.string() }))
-    .describe("10–15 popular, active X accounts that regularly post valuable content on this topic"),
+    .describe("10–15 active X accounts (any size) whose posts on this topic regularly get high engagement"),
   feeds: z
     .array(z.object({ url: z.string().describe("Direct RSS or Atom feed URL"), name: z.string() }))
     .describe("8–12 RSS/Atom feeds of reputable sources that publish often on this topic"),
@@ -29,8 +29,6 @@ export type TopicSetupResult = {
 
 // Feeds that haven't published for this long are skipped
 const MAX_FEED_SILENCE_DAYS = 60;
-// Accounts smaller than this are skipped (when X lookup is available)
-const MIN_FOLLOWERS = 5_000;
 
 async function checkFeed(url: string): Promise<{ ok: boolean; items: number; reason?: string }> {
   try {
@@ -78,7 +76,7 @@ export async function improveTopic(topicId: number): Promise<TopicSetupResult> {
       "You help set up a news-monitoring tool for a social media creator.",
       "Use web search to find REAL, currently active sources. Never invent handles or feed URLs.",
       "Feeds must be direct RSS/Atom URLs (e.g. https://site.com/feed, a subreddit's /top/.rss?t=day, a YouTube channel's feeds/videos.xml?channel_id=…), not normal web pages.",
-      "Accounts must be popular and active on X, posting original content about the topic (experts, researchers, publications, organisations).",
+      "Accounts: active X accounts whose posts about this topic regularly get strong engagement (many likes, reposts, replies), of ANY size. Account size doesn't matter; how well their posts perform does. Prefer creators with original content over brand accounts that post many low-engagement links.",
       "Keywords: the terms people really use in posts and headlines, including common synonyms and abbreviations. Avoid words so generic they match unrelated posts.",
     ].join("\n"),
     prompt: [
@@ -119,11 +117,8 @@ export async function improveTopic(topicId: number): Promise<TopicSetupResult> {
   for (const h of handles) {
     if (!followers) addedAccounts.push({ handle: h, followers: null });
     else if (!followers.has(norm(h))) skippedAccounts.push(`${h} (not found)`);
-    else if (followers.get(norm(h))! < MIN_FOLLOWERS)
-      skippedAccounts.push(`${h} (${followers.get(norm(h))} followers)`);
     else addedAccounts.push({ handle: h, followers: followers.get(norm(h))! });
   }
-  addedAccounts.sort((a, b) => (b.followers ?? 0) - (a.followers ?? 0));
 
   const join = (current: string, extra: string[]) => [...lines(current), ...extra].join("\n");
   const descriptionSet = !topic.description.trim() && Boolean(s.description.trim());

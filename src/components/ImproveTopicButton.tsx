@@ -2,7 +2,6 @@
 
 import { CircleAlert, LoaderCircle, Sparkles } from "lucide-react";
 import type { TopicSetupResult } from "@/lib/agents/topic-setup";
-import { formatCount } from "@/lib/util";
 import { jobLabel, useJob } from "./useJob";
 
 /** Claude researches keywords, X accounts and feeds; the app verifies them and adds the good ones. */
@@ -37,12 +36,7 @@ export function ImproveTopicButton({ topicId }: { topicId: number }) {
             below and press Save if you edit anything.
           </p>
           {result.addedAccounts.length > 0 && (
-            <p className="text-muted">
-              Accounts:{" "}
-              {result.addedAccounts
-                .map((a) => `@${a.handle}${a.followers != null ? ` (${formatCount(a.followers)})` : ""}`)
-                .join(", ")}
-            </p>
+            <p className="text-muted">Accounts: {result.addedAccounts.map((a) => `@${a.handle}`).join(", ")}</p>
           )}
           {result.addedFeeds.length > 0 && (
             <p className="text-muted">
