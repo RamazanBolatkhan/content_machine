@@ -39,3 +39,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local data (database + downloaded media)
+/data/
+
+# env example is safe to commit
+!.env.example
