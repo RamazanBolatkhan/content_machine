@@ -52,7 +52,7 @@ export default async function DraftsBoard({ searchParams }: PageProps<"/">) {
           <h1 className="t-h2">Drafts</h1>
           <p className="t-body max-w-xl text-muted">
             Popular X posts, your bookmarks and fresh news, scored by AI. Pick the good ones, write them in{" "}
-            {langs.length} languages, then post yourself.
+            {langs.length === 1 ? langInfo(langs[0]).name : `${langs.length} languages`}, then post yourself.
           </p>
         </div>
         <CollectButtons
