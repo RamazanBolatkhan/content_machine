@@ -13,6 +13,7 @@ You pick what's worth sharing. Claude finds the news and writes each post in �
 ![Languages](https://img.shields.io/badge/languages-6-blueviolet)
 ![Runs locally](https://img.shields.io/badge/runs-locally-success)
 ![Cost](https://img.shields.io/badge/running%20cost-~%240-brightgreen)
+![License: MIT](https://img.shields.io/badge/license-MIT-black)
 
 [Features](#-features) · [How it works](#-how-it-works) · [Quick start](#-quick-start) · [Daily workflow](#-daily-workflow) · [Configuration](#%EF%B8%8F-configuration) · [Troubleshooting](#-troubleshooting)
 
@@ -382,6 +383,10 @@ The interface follows the type scale, spacing and components of Motorway's [The 
 ## 🧱 Built with
 
 [Next.js 16](https://nextjs.org) · [React 19](https://react.dev) · [Tailwind CSS 4](https://tailwindcss.com) · [Lucide icons](https://lucide.dev) · [Drizzle ORM](https://orm.drizzle.team) + SQLite · [Claude Code](https://code.claude.com/docs) · [AI SDK](https://ai-sdk.dev) · [X API v2](https://docs.x.com)
+
+## 📄 License
+
+[MIT](LICENSE) © 2026 Ramazan Bolatkhan. Use it, change it, share it.
 
 ---
 
