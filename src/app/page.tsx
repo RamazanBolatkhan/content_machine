@@ -8,7 +8,7 @@ import { SourceBadge } from "@/components/SourceBadge";
 import { StatusButtons } from "@/components/StatusButtons";
 import { WriteButton } from "@/components/WriteButton";
 import { enabledLangs, isLangCode, langInfo, type LangCode } from "@/lib/languages";
-import { getSettings, getTopics, listDrafts } from "@/lib/queries";
+import { getSettings, getTopics, latestSearch, listDrafts } from "@/lib/queries";
 import { formatCount, timeAgo } from "@/lib/util";
 import { hasReferencePosts } from "@/lib/agents/reference";
 import { xAccount } from "@/lib/x/auth";
@@ -28,26 +28,41 @@ export default async function DraftsBoard({ searchParams }: PageProps<"/">) {
   const sp = await searchParams;
   const status = (DRAFT_STATUSES as readonly string[]).includes(String(sp.status)) ? (sp.status as DraftStatus) : "new";
   const topicId: number | "none" | undefined = sp.topic === "none" ? "none" : Number(sp.topic) || undefined;
+  const onlyLatest = sp.found === "latest";
+  const sort: "score" | "newest" = sp.sort === "newest" ? "newest" : "score";
 
-  const [topics, settings, inTopic, noTopic, xConnected, hasTopPosts] = await Promise.all([
+  const [topics, settings, allInTopic, noTopic, xConnected, hasTopPosts, latest] = await Promise.all([
     getTopics(),
     getSettings(),
     listDrafts({ topicId }),
     listDrafts({ topicId: "none" }),
     xAccount().then((a) => a !== null),
     hasReferencePosts(),
+    latestSearch(),
   ]);
+  const isLatest = (d: { runId: number | null }) => d.runId != null && latest.runIds.has(d.runId);
+  const latestCount = allInTopic.filter((d) => isLatest(d) && d.status === "new").length;
+  const inTopic = onlyLatest ? allInTopic.filter(isLatest) : allInTopic;
   const langs = enabledLangs(settings);
-  const drafts = inTopic.filter((d) => d.status === status);
+  const drafts = inTopic
+    .filter((d) => d.status === status)
+    .sort((a, b) => (sort === "newest" ? b.createdAt.getTime() - a.createdAt.getTime() || b.score - a.score : 0));
   const counts = Object.fromEntries(DRAFT_STATUSES.map((s) => [s, inTopic.filter((d) => d.status === s).length]));
 
   // Which text the cards show: the original post, or one of the languages
   const view: LangCode | "original" = isLangCode(sp.lang) && langs.includes(sp.lang) ? sp.lang : "original";
   const hasNoTopic = noTopic.length > 0;
-  const href = (s: DraftStatus, t?: number | "none", v: LangCode | "original" = view) => {
+  const href = (
+    s: DraftStatus,
+    t?: number | "none",
+    v: LangCode | "original" = view,
+    opts: { latest?: boolean; sort?: "score" | "newest" } = {},
+  ) => {
     const q = new URLSearchParams({ status: s });
     if (t) q.set("topic", String(t));
     if (v !== "original") q.set("lang", v);
+    if (opts.latest ?? onlyLatest) q.set("found", "latest");
+    if ((opts.sort ?? sort) === "newest") q.set("sort", "newest");
     return `/?${q}`;
   };
 
@@ -94,6 +109,35 @@ export default async function DraftsBoard({ searchParams }: PageProps<"/">) {
             )}
           </FilterRow>
         )}
+        <FilterRow label="Found">
+          <Link
+            href={href(status, topicId, view, { latest: false })}
+            className={`chip ${!onlyLatest ? "chip-selected" : ""}`}
+          >
+            Any time
+          </Link>
+          <Link
+            href={href("new", topicId, view, { latest: true })}
+            className={`chip ${onlyLatest ? "chip-selected" : ""}`}
+            title={latest.at ? `Search started ${latest.at.toLocaleString()}` : "No search yet"}
+          >
+            <Sparkles size={14} aria-hidden /> Latest search
+            <span className="chip-count">{latestCount}</span>
+          </Link>
+          <span className="mx-1 h-6 w-px bg-line" aria-hidden />
+          <Link
+            href={href(status, topicId, view, { sort: "score" })}
+            className={`chip ${sort === "score" ? "chip-selected" : ""}`}
+          >
+            Best first
+          </Link>
+          <Link
+            href={href(status, topicId, view, { sort: "newest" })}
+            className={`chip ${sort === "newest" ? "chip-selected" : ""}`}
+          >
+            Newest first
+          </Link>
+        </FilterRow>
         <FilterRow label="Show in">
           <Link
             href={href(status, topicId, "original")}
@@ -120,14 +164,26 @@ export default async function DraftsBoard({ searchParams }: PageProps<"/">) {
           }
         />
       ) : drafts.length === 0 ? (
-        <EmptyState
-          title={`No ${STATUS_LABEL[status].toLowerCase()} drafts`}
-          text={
-            status === "new"
-              ? "Press “Find posts & news” to collect fresh posts."
-              : "Drafts you move here will show up in this list."
-          }
-        />
+        onlyLatest ? (
+          <EmptyState
+            title={`No ${STATUS_LABEL[status].toLowerCase()} drafts from your latest search`}
+            text="Run a new search, or switch “Found” to “Any time” to see everything."
+            action={
+              <Link href={href(status, topicId, view, { latest: false })} className="btn btn-secondary">
+                Show all drafts
+              </Link>
+            }
+          />
+        ) : (
+          <EmptyState
+            title={`No ${STATUS_LABEL[status].toLowerCase()} drafts`}
+            text={
+              status === "new"
+                ? "Press “Find posts & news” to collect fresh posts."
+                : "Drafts you move here will show up in this list."
+            }
+          />
+        )
       ) : (
         <div className="grid gap-6 md:grid-cols-2">
           {drafts.map((d) => (
@@ -142,6 +198,11 @@ export default async function DraftsBoard({ searchParams }: PageProps<"/">) {
                   <span className="badge badge-inverse" title="AI importance, 1–10">
                     {d.score}/10
                   </span>
+                  {isLatest(d) && (
+                    <span className="badge badge-inverse" title="Found by your latest search">
+                      <Sparkles size={12} aria-hidden /> Just found
+                    </span>
+                  )}
                   {d.matchesTop && (
                     <span className="badge badge-outline" title="Similar to your best-performing Threads posts">
                       <Star size={12} aria-hidden /> Like your top posts

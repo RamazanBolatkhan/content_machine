@@ -16,6 +16,7 @@ import { fetchNewBookmarks } from "@/lib/x/bookmarks";
 import { searchRecentPosts, searchXNews, xConfigured, type XPost } from "@/lib/x/client";
 
 export type RunResult = {
+  runId: number;
   label: string;
   read: number;
   candidates: number;
@@ -296,7 +297,7 @@ async function pool<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>
  */
 async function saveDrafts(
   judged: { candidate: Candidate; j: Judgement }[],
-  opts: { curated: boolean; topics: Topic[]; settings: Settings },
+  opts: { curated: boolean; topics: Topic[]; settings: Settings; runId: number },
 ): Promise<number> {
   const topicIds = new Set(opts.topics.map((g) => g.id));
   const existingStories = new Set((await recentStories()).map((r) => r.storyKey));
@@ -363,6 +364,7 @@ async function saveDrafts(
           storyKey: j.storyKey,
           media,
           status: recommended ? "new" : "rejected",
+          runId: opts.runId,
         })
         .onConflictDoNothing()
         .returning({ id: schema.drafts.id });
@@ -393,13 +395,14 @@ async function logged(
   kind: (typeof RUN_KINDS)[number],
   topicId: number | null,
   label: string,
+  jobId: number | undefined,
   fn: (r: RunResult) => Promise<void>,
 ): Promise<RunResult> {
   const [run] = await db
     .insert(schema.scoutRuns)
-    .values({ kind, topicId, startedAt: new Date() })
+    .values({ kind, topicId, jobId: jobId ?? null, startedAt: new Date() })
     .returning({ id: schema.scoutRuns.id });
-  const result: RunResult = { label, read: 0, candidates: 0, saved: 0, warnings: [] };
+  const result: RunResult = { runId: run.id, label, read: 0, candidates: 0, saved: 0, warnings: [] };
   try {
     await fn(result);
   } catch (err) {
@@ -426,8 +429,8 @@ function enabledTopics(): Promise<Topic[]> {
 // ---------- public entry points ----------
 
 /** Import new X bookmarks: every one becomes a draft. */
-export async function syncBookmarks(): Promise<RunResult> {
-  return logged("bookmarks", null, "X bookmarks", async (r) => {
+export async function syncBookmarks(jobId?: number): Promise<RunResult> {
+  return logged("bookmarks", null, "X bookmarks", jobId, async (r) => {
     const settings = await getSettings();
     const topics = await enabledTopics();
     const posts = await fetchNewBookmarks(
@@ -438,20 +441,25 @@ export async function syncBookmarks(): Promise<RunResult> {
     if (!posts.length && !r.warnings.length) r.warnings.push("No new bookmarks since the last import");
     r.read = posts.length;
     r.candidates = posts.length;
-    r.saved = await importCuratedPosts(posts, topics, settings);
+    r.saved = await importCuratedPosts(posts, topics, settings, r.runId);
   });
 }
 
 /** X posts the owner picked: every one becomes a draft (AI finds the topic and translates). */
-export async function importCuratedPosts(posts: XPost[], topics: Topic[], settings: Settings): Promise<number> {
+export async function importCuratedPosts(
+  posts: XPost[],
+  topics: Topic[],
+  settings: Settings,
+  runId: number,
+): Promise<number> {
   if (!posts.length) return 0;
   const candidates = posts.map((p) => fromXPost(p, "x_bookmark", null));
   const judged = await judge(candidates, { curated: true, topics, settings });
-  return saveDrafts(judged, { curated: true, topics, settings });
+  return saveDrafts(judged, { curated: true, topics, settings, runId });
 }
 
 /** Find news for each enabled topic (or one topic) from RSS, Claude web search and, if enabled, paid X search. */
-export async function findNews(topicId?: number): Promise<RunResult[]> {
+export async function findNews(topicId?: number, jobId?: number): Promise<RunResult[]> {
   const settings = await getSettings();
   const topics = (await enabledTopics()).filter((g) => !topicId || g.id === topicId);
   const allTopics = await enabledTopics();
@@ -466,7 +474,7 @@ export async function findNews(topicId?: number): Promise<RunResult[]> {
   const results: RunResult[] = [];
   for (const topic of topics) {
     results.push(
-      await logged("news", topic.id, topic.name, async (r) => {
+      await logged("news", topic.id, topic.name, jobId, async (r) => {
         const candidates: Candidate[] = [];
 
         if (settings.rssEnabled) {
@@ -535,7 +543,7 @@ export async function findNews(topicId?: number): Promise<RunResult[]> {
         if (!fresh.length) return;
 
         const judged = await judge(fresh, { curated: false, topics: allTopics, settings });
-        r.saved = await saveDrafts(judged, { curated: false, topics: allTopics, settings });
+        r.saved = await saveDrafts(judged, { curated: false, topics: allTopics, settings, runId: r.runId });
       }),
     );
   }
@@ -546,8 +554,8 @@ export async function findNews(topicId?: number): Promise<RunResult[]> {
  * "Find like my top posts": search only with themes derived from the owner's top Threads posts
  * (X search when enabled + Claude web search), and keep only items that would make a similar post.
  */
-export async function findLikeTopPosts(): Promise<RunResult> {
-  return logged("similar", null, "Like my top posts", async (r) => {
+export async function findLikeTopPosts(jobId?: number): Promise<RunResult> {
+  return logged("similar", null, "Like my top posts", jobId, async (r) => {
     const settings = await getSettings();
     const topics = await enabledTopics();
     const themes = await similarSearchThemes(4);
@@ -611,6 +619,6 @@ export async function findLikeTopPosts(): Promise<RunResult> {
     const judged = await judge(fresh, { curated: false, topics, settings, similarOnly: true });
     // Everything kept by this search is, by definition, like the top posts
     for (const item of judged) if (item.j.keep) item.j.matchesTop = true;
-    r.saved = await saveDrafts(judged, { curated: false, topics, settings });
+    r.saved = await saveDrafts(judged, { curated: false, topics, settings, runId: r.runId });
   });
 }

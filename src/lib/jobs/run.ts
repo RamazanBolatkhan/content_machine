@@ -17,12 +17,12 @@ export async function runJob(job: Job): Promise<unknown> {
   switch (job.kind) {
     case "find_news": {
       const p = JOB_PAYLOADS.find_news.parse(job.payload);
-      return findNews(p.topicId);
+      return findNews(p.topicId, job.id);
     }
     case "bookmarks":
-      return [await syncBookmarks()];
+      return [await syncBookmarks(job.id)];
     case "similar":
-      return [await findLikeTopPosts()];
+      return [await findLikeTopPosts(job.id)];
     case "write": {
       const p = JOB_PAYLOADS.write.parse(job.payload);
       return { written: await writeMissingLanguages(p.draftId) };

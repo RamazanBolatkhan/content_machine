@@ -90,6 +90,19 @@ export async function recentRuns(limit = 15) {
   return runs.map((r) => ({ ...r, topicName: r.topicId ? (topics.get(r.topicId) ?? "deleted") : "–" }));
 }
 
+/**
+ * The most recent search: every run started by the same job (one per topic),
+ * or the single latest run when it wasn't started by a job (e.g. scout:loop).
+ */
+export async function latestSearch(): Promise<{ runIds: Set<number>; at: Date | null }> {
+  const [last] = await db.select().from(schema.scoutRuns).orderBy(desc(schema.scoutRuns.id)).limit(1);
+  if (!last) return { runIds: new Set(), at: null };
+  const runs = last.jobId
+    ? await db.select({ id: schema.scoutRuns.id }).from(schema.scoutRuns).where(eq(schema.scoutRuns.jobId, last.jobId))
+    : [{ id: last.id }];
+  return { runIds: new Set(runs.map((r) => r.id)), at: last.startedAt };
+}
+
 // ---------- Jobs + worker ----------
 
 export async function enqueueJob(kind: JobKind, payload: Record<string, unknown> = {}): Promise<number> {

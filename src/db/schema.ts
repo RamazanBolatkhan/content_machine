@@ -101,6 +101,8 @@ export const drafts = pgTable("drafts", {
   matchesTop: boolean("matches_top").notNull().default(false),
   media: jsonb("media").$type<MediaItem[]>().notNull().default([]),
   status: text("status", { enum: DRAFT_STATUSES }).notNull().default("new"),
+  // The search run that found it (for "Latest search" on the board)
+  runId: integer("run_id").references(() => scoutRuns.id, { onDelete: "set null" }),
   createdAt: createdAt(),
 });
 
@@ -123,6 +125,8 @@ export const RUN_KINDS = ["bookmarks", "news", "similar"] as const;
 
 export const scoutRuns = pgTable("scout_runs", {
   id: serial("id").primaryKey(),
+  // The job that started it: one "Find posts & news" job runs once per topic
+  jobId: integer("job_id"),
   kind: text("kind", { enum: RUN_KINDS }).notNull(),
   topicId: integer("topic_id").references(() => topics.id, { onDelete: "set null" }),
   startedAt: timestamp("started_at", { withTimezone: true }).notNull(),

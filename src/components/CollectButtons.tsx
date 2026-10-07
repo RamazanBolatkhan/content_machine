@@ -1,6 +1,6 @@
 "use client";
 
-import { Bookmark, CircleAlert, Info, LoaderCircle, Search, Star } from "lucide-react";
+import { ArrowRight, Bookmark, CircleAlert, Info, LoaderCircle, Search, Star } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import type { RunResult } from "@/lib/agents/scout";
@@ -31,7 +31,11 @@ export function CollectButtons({
             <Bookmark size={16} aria-hidden /> Import bookmarks
           </button>
         ) : (
-          <Link href="/settings#connections" className="btn btn-secondary" title="Connect your X account to import bookmarks">
+          <Link
+            href="/settings#connections"
+            className="btn btn-secondary"
+            title="Connect your X account to import bookmarks"
+          >
             <Bookmark size={16} aria-hidden /> Connect X
           </Link>
         )}
@@ -101,6 +105,12 @@ export function CollectButtons({
         </p>
       )}
 
+      {state.status === "done" && state.result && state.result.some((r) => r.saved > 0) && (
+        <Link href="/?status=new&found=latest&sort=newest" className="btn btn-primary btn-sm">
+          Show the {state.result.reduce((n, r) => n + r.saved, 0)} new drafts <ArrowRight size={14} aria-hidden />
+        </Link>
+      )}
+
       {state.status === "done" && state.result && (
         <ul className="t-small w-full max-w-xl space-y-2 md:text-right" role="status">
           {state.result.length === 0 && <li className="text-muted">No enabled topics.</li>}
@@ -108,7 +118,10 @@ export function CollectButtons({
             <li key={r.label} className="space-y-1">
               <div>
                 <span className="font-semibold">{r.label}</span>
-                <span className="text-muted"> · found {r.read} · checked {r.candidates} · </span>
+                <span className="text-muted">
+                  {" "}
+                  · found {r.read} · checked {r.candidates} ·{" "}
+                </span>
                 <span className="font-semibold">{r.saved} new drafts</span>
               </div>
               {r.error && (
