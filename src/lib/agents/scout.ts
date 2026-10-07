@@ -131,6 +131,11 @@ export function buildAccountsQuery(handles: string[]): string {
   return `(${handles.map((h) => `from:${h}`).join(" OR ")}) -is:retweet -is:reply`;
 }
 
+/** Minimum likes (and views, when set) for X search results. */
+function passesEngagement(p: XPost, settings: Settings): boolean {
+  return p.metrics.likes >= settings.minLikes && (!settings.minViews || (p.metrics.views ?? 0) >= settings.minViews);
+}
+
 /** Engagement per hour, so fast-rising posts beat old viral ones. */
 export function scorePost(post: XPost, trusted: Set<string>): number {
   const m = post.metrics;
@@ -158,14 +163,16 @@ async function xSearchCandidates(topic: Topic, settings: Settings, warn: (m: str
     }
   }
   const trusted = new Set(handles.map((h) => h.toLowerCase()));
-  return posts
-    .filter((p) => !p.isReply)
-    .filter((p) => p.metrics.likes >= settings.minLikes || trusted.has(p.authorHandle.toLowerCase()))
-    .filter((p) => !settings.minViews || (p.metrics.views ?? Infinity) >= settings.minViews)
-    .map((p) => ({ post: p, score: scorePost(p, trusted) }))
-    .sort((a, b) => b.score - a.score)
-    .slice(0, settings.candidatesPerTopic)
-    .map(({ post }) => fromXPost(post, "x_search", topic.id));
+  return (
+    posts
+      .filter((p) => !p.isReply)
+      // Same bar for everyone: accounts you watch only rank higher among posts that pass
+      .filter((p) => passesEngagement(p, settings))
+      .map((p) => ({ post: p, score: scorePost(p, trusted) }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, settings.candidatesPerTopic)
+      .map(({ post }) => fromXPost(post, "x_search", topic.id))
+  );
 }
 
 // ---------- AI: judge + translate ----------
@@ -229,6 +236,7 @@ async function judge(
             : [
                 "Decide for each item if it is worth posting for followers of its topic: real news, launches and announcements, new research or data, notable updates, expert insights, practical advice from credible people, or genuinely useful/surprising content.",
                 "Reject: spam, ads, giveaways, SEO listicles, empty engagement bait, minor drama, items that match a keyword by accident but are not really about the topic, old news.",
+                "For X posts, use the engagement numbers: the owner wants content that already proved popular. Posts with few likes/reposts for their age and views deserve a LOW importance (≤4) and usually keep=false, even from well-known accounts.",
                 "If an item covers a story in the 'already have' list, reuse that storyKey and set keep=false.",
                 "If several items cover the same new story, give them the same storyKey; the app keeps the best.",
               ].join("\n"),
@@ -255,7 +263,15 @@ async function judge(
               c.source === "x_bookmark" || c.source === "x_search" ? `X post by @${c.authorHandle}` : c.sourceName,
             topicId: c.topicId,
             date: c.postedAt?.toISOString().slice(0, 10) ?? null,
-            likes: c.metrics?.likes,
+            ...(c.metrics && {
+              engagement: {
+                likes: c.metrics.likes,
+                reposts: c.metrics.reposts,
+                replies: c.metrics.replies,
+                views: c.metrics.views,
+                hoursOld: c.postedAt ? Math.round((Date.now() - c.postedAt.getTime()) / 3600_000) : null,
+              },
+            }),
             hasMedia: c.media.map((m) => m.type),
             text: c.text.slice(0, 2000),
           })),
@@ -592,7 +608,7 @@ export async function findLikeTopPosts(jobId?: number): Promise<RunResult> {
           const posts = await searchRecentPosts({ query, maxResults: 20, sinceHours });
           candidates.push(
             ...posts
-              .filter((p) => !p.isReply && p.metrics.likes >= settings.minLikes)
+              .filter((p) => !p.isReply && passesEngagement(p, settings))
               .map((p) => fromXPost(p, "x_search", null)),
           );
         } catch (e) {
