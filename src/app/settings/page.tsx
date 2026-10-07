@@ -2,6 +2,7 @@ import { connection } from "next/server";
 import { Check, CircleAlert, Info, Plus, Trash2 } from "lucide-react";
 import { deleteTopic, disconnectXAction, saveSettings, saveTopic } from "@/app/actions";
 import type { Topic } from "@/db/schema";
+import { ImproveTopicButton } from "@/components/ImproveTopicButton";
 import { AI_PROVIDER, aiConfigured, aiSetupHint, DEFAULT_STYLE } from "@/lib/ai";
 import { LANGUAGES } from "@/lib/languages";
 import { getSettings, getTopics, recentRuns } from "@/lib/queries";
@@ -56,7 +57,9 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
             <h3 className="t-h6">AI</h3>
             {aiConfigured() ? (
               <Status ok>
-                {AI_PROVIDER === "claude-code" ? "Claude Code on your subscription (no API cost)" : "Vercel AI Gateway (paid per token)"}
+                {AI_PROVIDER === "claude-code"
+                  ? "Claude Code on your subscription (no API cost)"
+                  : "Vercel AI Gateway (paid per token)"}
               </Status>
             ) : (
               <Status>{aiSetupHint()}</Status>
@@ -80,8 +83,8 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
               </a>
             ) : (
               <p className="t-small text-muted">
-                Set <code>X_CLIENT_ID</code> in <code>.env.local</code>, and add the callback URL <code>{redirectUri()}</code> in
-                the X console.
+                Set <code>X_CLIENT_ID</code> in <code>.env.local</code>, and add the callback URL{" "}
+                <code>{redirectUri()}</code> in the X console.
               </p>
             )}
             <div className="divider" />
@@ -122,7 +125,12 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
                 label="X post search"
                 hint={`Posts from your accounts to watch, keyword posts above min likes, and X News. About $0.005 per post read.${xConfigured() ? "" : " Needs X_BEARER_TOKEN."}`}
               />
-              <Toggle name="rssEnabled" checked={s.rssEnabled} label="RSS feeds" hint="Free. Topic feeds and general news feeds below." />
+              <Toggle
+                name="rssEnabled"
+                checked={s.rssEnabled}
+                label="RSS feeds"
+                hint="Free. Topic feeds and general news feeds below."
+              />
               <Toggle
                 name="webSearchEnabled"
                 checked={s.webSearchEnabled}
@@ -133,7 +141,13 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
             <div className="divider" />
             <div className="grid gap-6 md:grid-cols-3">
               <Field label="Ignore news older than (hours)" name="maxAgeHours" type="number" value={s.maxAgeHours} />
-              <Field label="Max items per topic sent to AI" name="candidatesPerTopic" type="number" value={s.candidatesPerTopic} />
+              <Field
+                label="Max items per topic per run"
+                name="candidatesPerTopic"
+                type="number"
+                value={s.candidatesPerTopic}
+                hint="Up to 100. The AI scores them all; you pick which to write."
+              />
               <Field
                 label="Bookmarks per import (max)"
                 name="bookmarksPerSync"
@@ -160,7 +174,12 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
               <div className="mt-4 grid gap-6 md:grid-cols-4">
                 <Field label="Min likes" name="minLikes" type="number" value={s.minLikes} />
                 <Field label="Min views (0 = off)" name="minViews" type="number" value={s.minViews} />
-                <Field label="Posts read per query (10–100)" name="fetchPerTopic" type="number" value={s.fetchPerTopic} />
+                <Field
+                  label="Posts read per query (10–100)"
+                  name="fetchPerTopic"
+                  type="number"
+                  value={s.fetchPerTopic}
+                />
                 <Field label="Post language" name="searchLang" value={s.searchLang} hint="en, ja… Empty = any" />
               </div>
             </details>
@@ -168,7 +187,11 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
         </Section>
 
         {/* ---------- Languages ---------- */}
-        <Section id="languages" title="Languages" text="Every post is written in each checked language. Unchecking all means all.">
+        <Section
+          id="languages"
+          title="Languages"
+          text="Every post is written in each checked language. Unchecking all means all."
+        >
           <div className="card space-y-6 p-6">
             <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
               {LANGUAGES.map((l) => (
@@ -260,7 +283,9 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
               {runs.map((r) => (
                 <tr key={r.id}>
                   <td className="whitespace-nowrap text-muted">{r.startedAt.toLocaleString()}</td>
-                  <td className="font-semibold whitespace-nowrap">{r.kind === "bookmarks" ? "Bookmarks" : r.topicName}</td>
+                  <td className="font-semibold whitespace-nowrap">
+                    {r.kind === "bookmarks" ? "Bookmarks" : r.topicName}
+                  </td>
                   <td>{r.itemsRead}</td>
                   <td>{r.candidates}</td>
                   <td className="font-semibold">{r.saved}</td>
@@ -286,7 +311,17 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
   );
 }
 
-function Section({ id, title, text, children }: { id: string; title: string; text?: string; children: React.ReactNode }) {
+function Section({
+  id,
+  title,
+  text,
+  children,
+}: {
+  id: string;
+  title: string;
+  text?: string;
+  children: React.ReactNode;
+}) {
   return (
     <section id={id} className="scroll-mt-24 space-y-4">
       <div className="space-y-1">
@@ -302,7 +337,9 @@ function Status({ ok = false, children }: { ok?: boolean; children: React.ReactN
   const Icon = ok ? Check : CircleAlert;
   return (
     <p className={`t-small flex items-start gap-2 ${ok ? "" : "font-semibold"}`}>
-      <span className={`grid size-5 shrink-0 place-items-center rounded-full ${ok ? "bg-inverse text-on-inverse" : "border border-fg"}`}>
+      <span
+        className={`grid size-5 shrink-0 place-items-center rounded-full ${ok ? "bg-inverse text-on-inverse" : "border border-fg"}`}
+      >
         <Icon size={12} aria-hidden />
       </span>
       <span>{children}</span>
@@ -388,10 +425,37 @@ function TopicForm({ topic }: { topic?: Topic }) {
       </div>
       <div className="grid gap-6 md:grid-cols-2">
         <TopicField id={`name${suffix}`} label="Name">
-          <input id={`name${suffix}`} name="name" className="input" defaultValue={topic?.name} placeholder="OpenAI" required />
+          <input
+            key={topic?.name}
+            id={`name${suffix}`}
+            name="name"
+            className="input"
+            defaultValue={topic?.name}
+            placeholder="OpenAI"
+            required
+          />
         </TopicField>
-        <TopicField id={`keywords${suffix}`} label="Keywords" hint="One per line. Used for search and to match news.">
+        <TopicField
+          id={`description${suffix}`}
+          label="What you want to post about"
+          hint="Helps the AI judge items and find sources, e.g. “evidence-based psychology and mental health research, practical tips from experts”."
+        >
           <textarea
+            key={topic?.description}
+            id={`description${suffix}`}
+            name="description"
+            className="input t-small min-h-28"
+            defaultValue={topic?.description}
+            placeholder="e.g. new research, product launches and expert takes; no memes or drama"
+          />
+        </TopicField>
+        <TopicField
+          id={`keywords${suffix}`}
+          label="Keywords"
+          hint="One per line, most important first. Used for search and to match news."
+        >
+          <textarea
+            key={topic?.keywords}
             id={`keywords${suffix}`}
             name="keywords"
             className="input t-small min-h-28 font-mono"
@@ -406,6 +470,7 @@ function TopicForm({ topic }: { topic?: Topic }) {
           hint="One handle per line. Their posts are almost always popular; keyword search alone mostly finds posts with few likes."
         >
           <textarea
+            key={topic?.trustedAccounts}
             id={`accounts${suffix}`}
             name="trustedAccounts"
             className="input t-small min-h-28 font-mono"
@@ -415,6 +480,7 @@ function TopicForm({ topic }: { topic?: Topic }) {
         </TopicField>
         <TopicField id={`feeds${suffix}`} label="Feeds only about this topic" hint="RSS or Atom URLs, one per line.">
           <textarea
+            key={topic?.feeds}
             id={`feeds${suffix}`}
             name="feeds"
             className="input t-small min-h-28 font-mono"
@@ -434,11 +500,34 @@ function TopicForm({ topic }: { topic?: Topic }) {
           </button>
         )}
       </div>
+      {topic ? (
+        <div className="divider pt-6">
+          <ImproveTopicButton topicId={topic.id} />
+          <p className="field-hint">
+            Claude searches the web for keywords, popular X accounts and RSS feeds. The app checks every feed works and
+            every account exists (about $0.01 per account), then adds the good ones. Save your own edits first.
+          </p>
+        </div>
+      ) : (
+        <p className="field-hint">
+          Add the topic, then press “Improve with AI” to fill in keywords, accounts and feeds.
+        </p>
+      )}
     </form>
   );
 }
 
-function TopicField({ id, label, hint, children }: { id: string; label: string; hint?: string; children: React.ReactNode }) {
+function TopicField({
+  id,
+  label,
+  hint,
+  children,
+}: {
+  id: string;
+  label: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
   return (
     <div>
       <label htmlFor={id} className="field-label">

@@ -164,11 +164,12 @@ The app asks only for read access: `tweet.read`, `users.read`, `bookmark.read`, 
 
 ## 🎯 Add your topics
 
-Go to **Settings → Topics to track** and add one card per thing you post about.
+Go to **Settings → Topics** and add one card per thing you post about. Then press **✨ Improve with AI**: Claude searches the web for good keywords, popular X accounts and RSS feeds, the app **tests every feed** and **checks every account exists** (about $0.01 per account), and the good ones are added to the topic. You can edit everything afterwards.
 
 | Field | What to put in | Example |
 |---|---|---|
 | **Topic** | A company, product or theme | `OpenAI` |
+| **What you want to post about** | A sentence that guides the AI's judging and source search | `Launches, research and expert takes; no memes` |
 | **Keywords** | Names people use for it, one per line. Used by web search and to match general news feeds | `OpenAI`<br>`ChatGPT`<br>`Sam Altman` |
 | **Feeds** | RSS/Atom feeds that are *only* about this topic, one per line | `https://openai.com/news/rss.xml` |
 | **X accounts to watch** | X handles whose posts matter for this topic (used by X search) | `OpenAI`<br>`sama`<br>`OpenAIDevs` |
@@ -206,13 +207,15 @@ Put **general feeds** under **Settings → Sources → General AI news feeds**. 
    - **🔎 Find posts & news** to collect popular X posts and fresh news for all topics, or pick one topic from the list.
 
    A run takes about 1–3 minutes per topic.
-3. Go through the **New** tab. Every card shows the topic, the source, Claude's importance score (⭐ 1–10), why Claude picked it, and which languages are ready (🇨🇳 ZH 🇰🇷 KO 🇯🇵 JA …). Use **Show cards in:** to read the cards in the original or in any of your languages.
-4. Click **✏️ Open editor** on a good one:
+3. **Find** collects up to 100 items per topic, and Claude **scores** them all without writing anything yet. Recommended ones land in **New**; the rest go to **Rejected**, where you can still look.
+4. Go through the **New** tab. Every card shows the topic, the source, Claude's importance score (⭐ 1–10), why Claude picked it, and which languages are ready (🇨🇳 ZH 🇰🇷 KO 🇯🇵 JA …). Use **Show cards in:** to read the cards in the original or in any of your languages.
+5. Press **✨ Write it** on a good one to write it in all your languages (about 30 s). Bookmarks are written automatically, because you picked them.
+6. Click **Open editor** to polish it:
    - Switch between **language tabs**.
    - Edit by hand, or use the quick buttons (*Make it shorter*, *Explain the technical terms simply*…) or your own request.
    - Missing a language? Press **✨ Write missing languages**.
    - Use **Version history** to go back to any earlier version of that language.
-5. **📋 Copy text**, **⬇️ Download media**, post it, and press **📤 Mark posted**.
+7. **📋 Copy text**, **⬇️ Download media**, post it, and press **📤 Mark posted**.
 
 > [!TIP]
 > Credit the original author or outlet in your post (e.g. *“Source: OpenAI”*). The editor reminds you of the right name.

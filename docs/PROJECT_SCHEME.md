@@ -313,3 +313,11 @@ Each AI or hand edit creates a new version, so changes can be undone.
 - **Board:** a "Show cards in" switcher (`?lang=`): the Original (default) or any enabled language. Previously cards showed only the first language (Chinese), which the owner couldn't read.
 - Fresh installs keep X search **off** by default (it costs money). The owner's own DB has it switched on.
 - **Verified:** topic OpenAI with 4 accounts to watch → 4 drafts in 45 s (OpenAI posts with 34k and 3k likes, plus 2 X News stories), all 6 languages.
+
+## 16. Topic-neutral, 100 candidates, write on demand, Improve with AI (2026-10-07)
+
+- Prompts no longer assume AI news. The judge sees each topic's name, keywords and **description** (new `topics.description`), and web search uses the description too.
+- **Find** scores up to `candidatesPerTopic` (max 100) items per topic: the judge runs in batches of 20 and doesn't write. Items it recommends are saved as `new`, the others as `rejected` (still visible). Only one item per story is kept. Pictures are fetched/downloaded only for recommended items, 6 at a time. Writing happens on demand (**Write it** → `writeMissingLanguages`). Bookmarks are still written immediately.
+- **Improve with AI** (`src/lib/agents/topic-setup.ts`): Claude (WebSearch) suggests keywords, accounts and feeds. Feeds must load, have items and have been updated in the last 60 days. Accounts are looked up on X (`/2/users/by`, ~$0.01 each) and need ≥5k followers. Good ones are merged into the topic.
+- Keyword X queries are capped at ~400 characters (X query length limit).
+- **Verified on Psychology:** Improve added 13 keywords, 12 accounts and 5 feeds in 19 s. Find then read 207 items → 57 fresh → 54 saved (25 recommended) in 78 s, about $0.30 of X reads.

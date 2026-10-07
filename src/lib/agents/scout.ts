@@ -120,8 +120,11 @@ function matchesTopic(item: NewsItem, topic: Topic): boolean {
 
 /** Keyword search: finds everything, popular or not (most posts have few likes). */
 export function buildQuery(topic: Topic, settings: Settings): string {
-  const terms = lines(topic.keywords).map((k) => (/\s/.test(k) && !k.startsWith('"') ? `"${k}"` : k));
-  if (!terms.length) throw new Error(`Topic "${topic.name}" has no keywords`);
+  const all = lines(topic.keywords).map((k) => (/\s/.test(k) && !k.startsWith('"') ? `"${k}"` : k));
+  if (!all.length) throw new Error(`Topic "${topic.name}" has no keywords`);
+  // X limits query length: use the first (most important) keywords that fit
+  const terms: string[] = [];
+  for (const t of all) if (terms.length === 0 || [...terms, t].join(" OR ").length < 400) terms.push(t);
   const parts = [`(${terms.join(" OR ")})`, "-is:retweet", "-is:reply"];
   if (settings.searchLang) parts.push(`lang:${settings.searchLang}`);
   return parts.join(" ");
@@ -137,8 +140,7 @@ export function buildAccountsQuery(handles: string[]): string {
 /** Engagement per hour, so fast-rising posts beat old viral ones. */
 export function scorePost(post: XPost, trusted: Set<string>): number {
   const m = post.metrics;
-  const engagement =
-    m.likes + 2 * m.reposts + 3 * m.quotes + 0.5 * m.replies + m.bookmarks + (m.views ?? 0) / 1000;
+  const engagement = m.likes + 2 * m.reposts + 3 * m.quotes + 0.5 * m.replies + m.bookmarks + (m.views ?? 0) / 1000;
   const ageHours = post.createdAt ? Math.max(0, (Date.now() - post.createdAt.getTime()) / 3600_000) : 24;
   const bonus = trusted.has(post.authorHandle.toLowerCase()) ? 1.5 : 1;
   return Math.round((engagement / Math.pow(ageHours + 2, 1.2)) * bonus * 10) / 10;
@@ -154,7 +156,9 @@ async function xSearchCandidates(topic: Topic, settings: Settings, warn: (m: str
   const posts: XPost[] = [];
   for (const query of queries) {
     try {
-      posts.push(...(await searchRecentPosts({ query, maxResults: settings.fetchPerTopic, sinceHours: settings.maxAgeHours })));
+      posts.push(
+        ...(await searchRecentPosts({ query, maxResults: settings.fetchPerTopic, sinceHours: settings.maxAgeHours })),
+      );
     } catch (e) {
       warn(`X search "${query.slice(0, 60)}…": ${e instanceof Error ? e.message : e}`);
     }
@@ -182,13 +186,16 @@ const judgementSchema = z.object({
       reason: z.string().describe("One short sentence in English: why it is (or isn't) worth posting"),
       storyKey: z
         .string()
-        .describe("Short kebab-case id of the news story, e.g. openai-gpt6-launch. Reuse an existing key for the same story."),
+        .describe(
+          "Short kebab-case id of the news story, e.g. openai-gpt6-launch. Reuse an existing key for the same story.",
+        ),
     }),
   ),
 });
 type Judgement = z.infer<typeof judgementSchema>["items"][number];
 
-const BATCH_SIZE = 10;
+// Judging only (no writing), so bigger batches stay reliable
+const BATCH_SIZE = 20;
 
 function recentStories() {
   return db
@@ -226,7 +233,13 @@ async function judge(candidates: Candidate[], opts: { curated: boolean; topics: 
             ].join("\n"),
       ].join("\n"),
       prompt: [
-        `Topics (id: name [keywords]): ${opts.topics.map((t) => `${t.id}: ${t.name} [${lines(t.keywords).join(", ")}]`).join("; ") || "none"}`,
+        "Topics:",
+        ...(opts.topics.length
+          ? opts.topics.map(
+              (t) =>
+                `- id ${t.id}: ${t.name} [keywords: ${lines(t.keywords).join(", ")}]${t.description.trim() ? ` — the owner wants: ${t.description.trim()}` : ""}`,
+            )
+          : ["- none"]),
         "",
         recent.length
           ? `Already have (storyKey: text):\n${recent.map((r) => `- ${r.storyKey}: ${r.text.slice(0, 140).replace(/\s+/g, " ")}`).join("\n")}`
@@ -236,7 +249,8 @@ async function judge(candidates: Candidate[], opts: { curated: boolean; topics: 
         JSON.stringify(
           [...ids].map(([id, c]) => ({
             id,
-            source: c.source === "x_bookmark" || c.source === "x_search" ? `X post by @${c.authorHandle}` : c.sourceName,
+            source:
+              c.source === "x_bookmark" || c.source === "x_search" ? `X post by @${c.authorHandle}` : c.sourceName,
             topicId: c.topicId,
             date: c.postedAt?.toISOString().slice(0, 10) ?? null,
             likes: c.metrics?.likes,
@@ -259,6 +273,26 @@ async function judge(candidates: Candidate[], opts: { curated: boolean; topics: 
 
 // ---------- saving ----------
 
+/** Run `fn` over items with at most `limit` running at once. */
+async function pool<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(items.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const i = next++;
+      out[i] = await fn(items[i]);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return out;
+}
+
+/**
+ * Save judged items as drafts.
+ * - curated (bookmarks): every item, written right away in all languages.
+ * - otherwise: one item per new story, NOT written yet (the owner presses "Write it").
+ *   Items the AI recommends go to "new", the others to "rejected" so they stay visible.
+ */
 async function saveDrafts(
   judged: { candidate: Candidate; j: Judgement }[],
   opts: { curated: boolean; topics: Topic[]; settings: Settings },
@@ -266,46 +300,50 @@ async function saveDrafts(
   const topicIds = new Set(opts.topics.map((g) => g.id));
   const existingStories = new Set(recentStories().map((r) => r.storyKey));
 
-  // Pick what to save: everything (curated) or the best item per new story
+  // Pick what to save: everything (curated) or the best item per story we don't have yet
   const chosen = new Map<string, { candidate: Candidate; j: Judgement }>();
   for (const item of judged) {
     const { j } = item;
-    const keep = opts.curated || (j.keep && !existingStories.has(j.storyKey));
-    if (!keep) continue;
+    if (!opts.curated && existingStories.has(j.storyKey)) continue;
     const key = opts.curated ? item.candidate.sourceId : j.storyKey;
     const current = chosen.get(key);
-    if (!current || j.importance > current.j.importance) chosen.set(key, item);
+    const better =
+      !current || (j.keep && !current.j.keep) || (j.keep === current.j.keep && j.importance > current.j.importance);
+    if (better) chosen.set(key, item);
   }
+  const items = [...chosen.values()];
 
-  // Write the post in every enabled language
-  const langs = enabledLangs(opts.settings);
-  const posts = await writePosts(
-    [...chosen.values()].map(({ candidate: c }) => ({
-      id: c.sourceId,
-      source: c.source === "x_bookmark" || c.source === "x_search" ? `X post by @${c.authorHandle}` : c.sourceName,
-      text: c.text,
-    })),
-    langs,
-    opts.settings,
-  );
+  // Bookmarks are written right away; news waits for "Write it"
+  const posts = opts.curated
+    ? await writePosts(
+        items.map(({ candidate: c }) => ({ id: c.sourceId, source: `X post by @${c.authorHandle}`, text: c.text })),
+        enabledLangs(opts.settings),
+        opts.settings,
+      )
+    : new Map<string, Partial<Record<string, string>>>();
 
-  let saved = 0;
   const unwritten = new Set<string>();
-  for (const { candidate: c, j } of chosen.values()) {
-    const texts = Object.entries(posts.get(c.sourceId) ?? {});
-    if (!texts.length) {
+  const results = await pool(items, 6, async ({ candidate: c, j }) => {
+    const texts = Object.entries(posts.get(c.sourceId) ?? {}) as [string, string][];
+    if (opts.curated && !texts.length) {
       unwritten.add(c.sourceId); // not marked seen below, so it is retried next run
-      continue;
+      return false;
     }
-    let media = c.media;
-    if (!media.length && (c.source === "rss" || c.source === "web")) {
-      const image = await fetchOgImage(c.url);
-      if (image) media = [{ type: "photo", remoteUrl: image }];
+    const recommended = opts.curated || j.keep;
+
+    // Only fetch / download pictures for items worth posting
+    let media: MediaItem[] = c.media.map((m) => ({ ...m, file: null }));
+    if (recommended) {
+      let remote = c.media;
+      if (!remote.length && (c.source === "rss" || c.source === "web")) {
+        const image = await fetchOgImage(c.url);
+        if (image) remote = [{ type: "photo", remoteUrl: image }];
+      }
+      media = await downloadMedia(c.sourceId, remote);
     }
-    const files = await downloadMedia(c.sourceId, media);
     const topicId = c.topicId ?? (j.topicId != null && topicIds.has(j.topicId) ? j.topicId : null);
 
-    const ok = db.transaction((tx) => {
+    return db.transaction((tx) => {
       const draft = tx
         .insert(schema.drafts)
         .values({
@@ -321,19 +359,21 @@ async function saveDrafts(
           score: j.importance,
           aiReason: j.reason,
           storyKey: j.storyKey,
-          media: files,
+          media,
+          status: recommended ? "new" : "rejected",
         })
         .onConflictDoNothing()
         .returning({ id: schema.drafts.id })
         .get();
       if (!draft) return false;
-      tx.insert(schema.draftVersions)
-        .values(texts.map(([lang, text]) => ({ draftId: draft.id, lang, text, source: "ai_scout" as const })))
-        .run();
-      return true;
+      if (texts.length) {
+        tx.insert(schema.draftVersions)
+          .values(texts.map(([lang, text]) => ({ draftId: draft.id, lang, text, source: "ai_scout" as const })))
+          .run();
+      }
+      return recommended;
     });
-    if (ok) saved++;
-  }
+  });
 
   // Remember every judged item so the AI never sees it twice
   const seen = judged.filter(({ candidate }) => !unwritten.has(candidate.sourceId));
@@ -343,7 +383,7 @@ async function saveDrafts(
       .onConflictDoNothing()
       .run();
   }
-  return saved;
+  return results.filter(Boolean).length;
 }
 
 // ---------- run logging ----------
@@ -436,7 +476,9 @@ export async function findNews(topicId?: number): Promise<RunResult[]> {
           ];
           for (const feed of feeds) {
             try {
-              const items = (await getFeed(feed.url)).filter((i) => i.url && (feed.topicOnly || matchesTopic(i, topic)));
+              const items = (await getFeed(feed.url)).filter(
+                (i) => i.url && (feed.topicOnly || matchesTopic(i, topic)),
+              );
               candidates.push(...items.map((i) => fromNews(i, "rss", topic.id)));
             } catch (e) {
               r.warnings.push(`Feed ${feed.url}: ${e instanceof Error ? e.message : e}`);
@@ -446,7 +488,11 @@ export async function findNews(topicId?: number): Promise<RunResult[]> {
 
         if (settings.webSearchEnabled) {
           try {
-            const items = await searchTopicNews(topic, settings.maxAgeHours, 8);
+            const items = await searchTopicNews(
+              topic,
+              settings.maxAgeHours,
+              Math.min(20, Math.max(8, Math.ceil(settings.candidatesPerTopic / 4))),
+            );
             candidates.push(...items.map((i) => fromNews(i, "web", topic.id)));
           } catch (e) {
             r.warnings.push(`Web search: ${e instanceof Error ? e.message : e}`);

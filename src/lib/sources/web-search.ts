@@ -30,6 +30,7 @@ export async function searchTopicNews(topic: Topic, sinceHours: number, maxItems
     prompt: [
       `Today is ${today}. Find up to ${maxItems} of the most important news stories from the last ${days} day(s) about "${topic.name}".`,
       lines(topic.keywords).length ? `Related names / search terms: ${lines(topic.keywords).join(", ")}.` : "",
+      topic.description.trim() ? `The owner is looking for: ${topic.description.trim()}` : "",
       "Only include stories published within that period. If there is no real news, return an empty list.",
     ]
       .filter(Boolean)

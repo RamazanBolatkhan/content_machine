@@ -6,6 +6,7 @@ import { CollectButtons } from "@/components/CollectButtons";
 import { MediaGrid } from "@/components/MediaGrid";
 import { SourceBadge } from "@/components/SourceBadge";
 import { StatusButtons } from "@/components/StatusButtons";
+import { WriteButton } from "@/components/WriteButton";
 import { enabledLangs, isLangCode, langInfo, type LangCode } from "@/lib/languages";
 import { getSettings, getTopics, listDrafts } from "@/lib/queries";
 import { formatCount, timeAgo } from "@/lib/util";
@@ -24,9 +25,7 @@ const STATUS_LABEL: Record<DraftStatus, string> = {
 export default async function DraftsBoard({ searchParams }: PageProps<"/">) {
   await connection();
   const sp = await searchParams;
-  const status = (DRAFT_STATUSES as readonly string[]).includes(String(sp.status))
-    ? (sp.status as DraftStatus)
-    : "new";
+  const status = (DRAFT_STATUSES as readonly string[]).includes(String(sp.status)) ? (sp.status as DraftStatus) : "new";
   const topicId: number | "none" | undefined = sp.topic === "none" ? "none" : Number(sp.topic) || undefined;
 
   const topics = getTopics();
@@ -51,8 +50,8 @@ export default async function DraftsBoard({ searchParams }: PageProps<"/">) {
         <div className="space-y-2">
           <h1 className="t-h2">Drafts</h1>
           <p className="t-body max-w-xl text-muted">
-            Popular X posts, your bookmarks and fresh AI news, written in {langs.length} languages. Review, edit, then post
-            yourself.
+            Popular X posts, your bookmarks and fresh news, scored by AI. Pick the good ones, write them in{" "}
+            {langs.length} languages, then post yourself.
           </p>
         </div>
         <CollectButtons
@@ -88,7 +87,10 @@ export default async function DraftsBoard({ searchParams }: PageProps<"/">) {
           </FilterRow>
         )}
         <FilterRow label="Show in">
-          <Link href={href(status, topicId, "original")} className={`chip ${view === "original" ? "chip-selected" : ""}`}>
+          <Link
+            href={href(status, topicId, "original")}
+            className={`chip ${view === "original" ? "chip-selected" : ""}`}
+          >
             Original
           </Link>
           {langs.map((c) => (
@@ -112,7 +114,11 @@ export default async function DraftsBoard({ searchParams }: PageProps<"/">) {
       ) : drafts.length === 0 ? (
         <EmptyState
           title={`No ${STATUS_LABEL[status].toLowerCase()} drafts`}
-          text={status === "new" ? "Press “Find posts & news” to collect fresh posts." : "Drafts you move here will show up in this list."}
+          text={
+            status === "new"
+              ? "Press “Find posts & news” to collect fresh posts."
+              : "Drafts you move here will show up in this list."
+          }
         />
       ) : (
         <div className="grid gap-6 md:grid-cols-2">
@@ -155,9 +161,18 @@ export default async function DraftsBoard({ searchParams }: PageProps<"/">) {
 
               <footer className="mt-auto flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
                 <StatusButtons draftId={d.id} status={d.status} />
-                <Link href={`/drafts/${d.id}`} className="btn btn-primary btn-sm">
-                  Open editor <ArrowRight size={16} aria-hidden />
-                </Link>
+                {Object.keys(d.texts).length === 0 ? (
+                  <div className="flex items-start gap-2">
+                    <Link href={`/drafts/${d.id}`} className="btn btn-ghost btn-sm">
+                      Open
+                    </Link>
+                    <WriteButton draftId={d.id} />
+                  </div>
+                ) : (
+                  <Link href={`/drafts/${d.id}`} className="btn btn-primary btn-sm">
+                    Open editor <ArrowRight size={16} aria-hidden />
+                  </Link>
+                )}
               </footer>
             </article>
           ))}
@@ -213,24 +228,28 @@ function CardText({
               {texts[view]}
             </p>
           ) : (
-            <p className="t-small text-muted italic">Not written in {langInfo(view).name} yet. Open the editor to write it.</p>
+            <p className="t-small text-muted italic">Not written in {langInfo(view).name} yet. Press “Write it”.</p>
           )}
           <p className="t-small line-clamp-2 text-muted">
             <span className="font-semibold">Original:</span> {original}
           </p>
         </>
       )}
-      <div className="flex flex-wrap gap-1">
-        {langs.map((c) => (
-          <span
-            key={c}
-            title={texts[c] ? `${langInfo(c).name}: written` : `${langInfo(c).name}: not written yet`}
-            className={`badge ${texts[c] ? "badge-outline" : "badge-missing"}`}
-          >
-            {c.toUpperCase()}
-          </span>
-        ))}
-      </div>
+      {Object.keys(texts).length === 0 ? (
+        <p className="t-caption text-muted">Scored only. Press “Write it” to write it in all languages.</p>
+      ) : (
+        <div className="flex flex-wrap gap-1">
+          {langs.map((c) => (
+            <span
+              key={c}
+              title={texts[c] ? `${langInfo(c).name}: written` : `${langInfo(c).name}: not written yet`}
+              className={`badge ${texts[c] ? "badge-outline" : "badge-missing"}`}
+            >
+              {c.toUpperCase()}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -6,6 +6,7 @@ import { db, schema } from "@/db";
 import { DRAFT_STATUSES, type DraftStatus } from "@/db/schema";
 import { findNews, syncBookmarks, type RunResult } from "@/lib/agents/scout";
 import { writeMissingLanguages } from "@/lib/agents/editor";
+import { improveTopic, type TopicSetupResult } from "@/lib/agents/topic-setup";
 import { isLangCode, LANG_CODES } from "@/lib/languages";
 import { disconnectX } from "@/lib/x/auth";
 
@@ -52,6 +53,16 @@ export async function writeMissingLanguagesAction(draftId: number): Promise<{ wr
   }
 }
 
+export async function improveTopicAction(topicId: number): Promise<{ result?: TopicSetupResult; error?: string }> {
+  try {
+    const result = await improveTopic(topicId);
+    revalidatePath("/settings");
+    return { result };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 export async function deleteDraft(draftId: number) {
   db.delete(schema.drafts).where(eq(schema.drafts.id, draftId)).run();
   revalidatePath("/");
@@ -71,6 +82,7 @@ export async function saveTopic(formData: FormData) {
   const id = Number(formData.get("id")) || undefined;
   const values = {
     name: text(formData, "name"),
+    description: text(formData, "description"),
     keywords: text(formData, "keywords"),
     feeds: text(formData, "feeds"),
     trustedAccounts: text(formData, "trustedAccounts"),
@@ -99,7 +111,7 @@ export async function saveSettings(formData: FormData) {
       xSearchEnabled: bool(formData, "xSearchEnabled"),
       newsFeeds: text(formData, "newsFeeds"),
       maxAgeHours: clamp(int(formData, "maxAgeHours", 48), 1, 167),
-      candidatesPerTopic: clamp(int(formData, "candidatesPerTopic", 15), 1, 40),
+      candidatesPerTopic: clamp(int(formData, "candidatesPerTopic", 50), 1, 100),
       minLikes: int(formData, "minLikes", 100),
       minViews: int(formData, "minViews", 0),
       fetchPerTopic: clamp(int(formData, "fetchPerTopic", 30), 10, 100),

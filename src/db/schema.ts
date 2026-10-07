@@ -10,6 +10,8 @@ const createdAt = () =>
 export const topics = sqliteTable("topics", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull(),
+  // What kind of posts the owner wants about this topic (helps the AI judge and set up sources)
+  description: text("description").notNull().default(""),
   // One search term per line, e.g. "ChatGPT", "GPT-5". Used for web search,
   // matching general news feeds and (paid) X search.
   keywords: text("keywords").notNull().default(""),
@@ -37,7 +39,7 @@ export const settings = sqliteTable("settings", {
   // Ignore news / posts older than this
   maxAgeHours: integer("max_age_hours").notNull().default(48),
   // Max news items per topic sent to the AI per run
-  candidatesPerTopic: integer("candidates_per_topic").notNull().default(15),
+  candidatesPerTopic: integer("candidates_per_topic").notNull().default(50),
   // --- Paid X search only ---
   minLikes: integer("min_likes").notNull().default(100),
   minViews: integer("min_views").notNull().default(0),
