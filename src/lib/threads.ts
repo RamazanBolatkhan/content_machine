@@ -12,12 +12,14 @@ export type ThreadsPost = {
   stats: string;
 };
 
-const POST_URL = /^https?:\/\/(?:www\.)?threads\.(?:net|com)\/@([\w.]+)\/post\/([\w-]+)/i;
+// threads.com/@user/post/ID  or the short share form threads.com/t/ID (also threads.net)
+const POST_URL = /^(?:https?:\/\/)?(?:www\.)?threads\.(?:net|com)\/(?:@([\w.]+)\/post|t)\/([\w-]+)/i;
 
-/** Canonical https://www.threads.com/@user/post/ID form, or null if it isn't a Threads post link. */
+/** Canonical Threads post URL (without tracking params), or null if it isn't a Threads post link. */
 export function normalizeThreadsUrl(raw: string): string | null {
   const m = POST_URL.exec(raw.trim());
-  return m ? `https://www.threads.com/@${m[1]}/post/${m[2]}` : null;
+  if (!m) return null;
+  return m[1] ? `https://www.threads.com/@${m[1]}/post/${m[2]}` : `https://www.threads.com/t/${m[2]}`;
 }
 
 const decode = (s: string) =>
@@ -63,9 +65,10 @@ export async function readThreadsPost(rawUrl: string): Promise<ThreadsPost> {
   if (!text) throw new Error("Couldn't read the post text (private, deleted or image-only?)");
 
   const likes = /class="ActionBarCount">([^<]+)</.exec(html)?.[1]?.trim();
+  const author = POST_URL.exec(url)![1] ?? /intent\/follow\?username=([\w.]+)/.exec(html)?.[1] ?? "";
   return {
-    url,
-    authorHandle: POST_URL.exec(url)![1],
+    url: author ? `https://www.threads.com/@${author}/post/${POST_URL.exec(url)![2]}` : url,
+    authorHandle: author,
     text,
     date: decode(/class="Timestamp">([^<]+)</.exec(html)?.[1] ?? ""),
     stats: likes ? `${likes} likes` : "",
