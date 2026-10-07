@@ -9,7 +9,7 @@ export async function GET(req: Request) {
     return Response.redirect(new URL("/api/x/login", expected.origin));
   }
   try {
-    return Response.redirect(buildAuthorizeUrl());
+    return Response.redirect(await buildAuthorizeUrl());
   } catch (e) {
     return new Response(e instanceof Error ? e.message : String(e), { status: 500 });
   }

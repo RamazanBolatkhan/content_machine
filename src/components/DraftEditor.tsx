@@ -1,11 +1,11 @@
 "use client";
 
 import { Check, CircleAlert, Copy, Download, History, LoaderCircle, Save, Send, Sparkles, Undo2, Wand2 } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { saveManualVersion, writeMissingLanguagesAction } from "@/app/actions";
+import { saveManualVersion } from "@/app/actions";
 import type { DraftVersion } from "@/db/schema";
 import { langInfo, type LangCode } from "@/lib/languages";
+import { jobLabel, useJob } from "./useJob";
 
 const QUICK_ASKS = [
   "Make it shorter",
@@ -35,19 +35,20 @@ export function DraftEditor({
   charLimit: number;
   hasMedia: boolean;
 }) {
-  const router = useRouter();
+  const editJob = useJob<{ text: string }>();
+  const fillJob = useJob<{ written: number }>();
   const latestFor = (code: LangCode) => versions.find((v) => v.lang === code)?.text ?? "";
 
   const [lang, setLang] = useState<LangCode>(langs.find((c) => latestFor(c)) ?? langs[0]);
   // Unsaved edits per language, so switching tabs keeps them
   const [edits, setEdits] = useState<Partial<Record<LangCode, string>>>({});
   const [instruction, setInstruction] = useState("");
-  const [aiBusy, setAiBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [saving, startSave] = useTransition();
-  const [filling, startFill] = useTransition();
 
+  const aiBusy = editJob.busy;
+  const filling = fillJob.busy;
   const info = langInfo(lang);
   const latest = latestFor(lang);
   const text = edits[lang] ?? latest;
@@ -60,33 +61,19 @@ export function DraftEditor({
 
   async function askAi(ask: string) {
     if (!ask.trim() || aiBusy || !text.trim()) return;
-    setAiBusy(true);
     setError(null);
-    try {
-      const res = await fetch(`/api/drafts/${draftId}/edit`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lang, instruction: ask, currentText: text }),
-      });
-      const body = await res.text();
-      if (!res.ok) throw new Error(body || `Error ${res.status}`);
+    const res = await editJob.run("edit", { draftId, lang, currentText: text, instruction: ask });
+    if (res.status === "error") setError(res.error ?? "Something went wrong");
+    else {
       discard(); // show the saved version
       setInstruction("");
-      router.refresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setAiBusy(false);
     }
   }
 
-  function fillMissing() {
+  async function fillMissing() {
     setError(null);
-    startFill(async () => {
-      const res = await writeMissingLanguagesAction(draftId);
-      if (res.error) setError(res.error);
-      router.refresh();
-    });
+    const res = await fillJob.run("write", { draftId });
+    if (res.status === "error") setError(res.error ?? "Something went wrong");
   }
 
   async function copy() {
@@ -132,7 +119,7 @@ export function DraftEditor({
             </div>
             <button className="btn btn-secondary btn-sm" onClick={fillMissing} disabled={filling}>
               {filling ? <LoaderCircle size={16} className="animate-spin" aria-hidden /> : <Wand2 size={16} aria-hidden />}
-              {filling ? "Writing…" : "Write them"}
+              {filling ? jobLabel(fillJob.state, "Writing…") : "Write them"}
             </button>
           </div>
         )}
@@ -223,7 +210,7 @@ export function DraftEditor({
           />
           <button className="btn btn-primary btn-lg" disabled={aiBusy || !instruction.trim() || !text.trim()}>
             {aiBusy ? <LoaderCircle size={18} className="animate-spin" aria-hidden /> : <Send size={18} aria-hidden />}
-            {aiBusy ? "Writing…" : "Send"}
+            {aiBusy ? jobLabel(editJob.state, "Writing…") : "Send"}
           </button>
         </form>
         {error && (

@@ -12,7 +12,7 @@ const minutes = Number(process.argv[2]) || 240;
 
 async function tick() {
   console.log(`[${new Date().toLocaleTimeString()}] collecting…`);
-  const results = [...(xAccount() ? [await syncBookmarks()] : []), ...(await findNews())];
+  const results = [...((await xAccount()) ? [await syncBookmarks()] : []), ...(await findNews())];
   for (const r of results) {
     console.log(`  ${r.label}: found ${r.read}, checked ${r.candidates}, saved ${r.saved}${r.error ? ` ERROR ${r.error}` : ""}`);
     for (const w of r.warnings) console.log(`    ⚠ ${w}`);

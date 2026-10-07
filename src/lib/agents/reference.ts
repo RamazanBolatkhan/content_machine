@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { eq, inArray } from "drizzle-orm";
 import { db, schema } from "@/db";
-import type { ReferencePost } from "@/db/schema";
+import type { ReferencePost, Settings } from "@/db/schema";
 import { aiObject, aiText } from "@/lib/ai";
 import { normalizeThreadsUrl, readThreadsPost } from "@/lib/threads";
 
@@ -21,7 +21,7 @@ const analysisSchema = z.object({
 /** English gist + themes for posts that have text but no analysis yet. */
 async function analyze(ids: number[]) {
   const posts = ids.length
-    ? db.select().from(schema.referencePosts).where(inArray(schema.referencePosts.id, ids)).all()
+    ? await db.select().from(schema.referencePosts).where(inArray(schema.referencePosts.id, ids))
     : [];
   const todo = posts.filter((p) => p.text.trim());
   if (!todo.length) return;
@@ -37,20 +37,16 @@ async function analyze(ids: number[]) {
     ),
   });
   for (const it of items) {
-    db.update(schema.referencePosts)
+    await db
+      .update(schema.referencePosts)
       .set({ lang: it.lang.toLowerCase().slice(0, 5), gistEn: it.gistEn, themes: it.themes })
-      .where(eq(schema.referencePosts.id, it.id))
-      .run();
+      .where(eq(schema.referencePosts.id, it.id));
   }
 }
 
 /** One short English profile of what works, used by the scout's judge. */
 export async function rebuildReferenceProfile(): Promise<string> {
-  const posts = db
-    .select()
-    .from(schema.referencePosts)
-    .all()
-    .filter((p) => p.gistEn);
+  const posts = (await db.select().from(schema.referencePosts)).filter((p) => p.gistEn);
   let profile = "";
   if (posts.length) {
     profile = await aiText({
@@ -61,7 +57,7 @@ export async function rebuildReferenceProfile(): Promise<string> {
         .join("\n"),
     });
   }
-  db.update(schema.settings).set({ referenceProfile: profile.trim() }).where(eq(schema.settings.id, 1)).run();
+  await db.update(schema.settings).set({ referenceProfile: profile.trim() }).where(eq(schema.settings.id, 1));
   return profile;
 }
 
@@ -82,7 +78,7 @@ export async function addReferencePosts(rawUrls: string[], note: string): Promis
       result.invalid.push(raw);
       continue;
     }
-    const row = db
+    const [row] = await db
       .insert(schema.referencePosts)
       .values({
         url,
@@ -94,8 +90,7 @@ export async function addReferencePosts(rawUrls: string[], note: string): Promis
         error,
       })
       .onConflictDoNothing()
-      .returning({ id: schema.referencePosts.id })
-      .get();
+      .returning({ id: schema.referencePosts.id });
     if (!row) result.duplicates++;
     else {
       newIds.push(row.id);
@@ -110,25 +105,29 @@ export async function addReferencePosts(rawUrls: string[], note: string): Promis
 
 /** The owner pasted the text of a post the app couldn't read. */
 export async function setReferenceText(id: number, text: string) {
-  db.update(schema.referencePosts)
+  await db
+    .update(schema.referencePosts)
     .set({ text: text.trim(), status: "ok", error: null })
-    .where(eq(schema.referencePosts.id, id))
-    .run();
+    .where(eq(schema.referencePosts.id, id));
   await analyze([id]);
   await rebuildReferenceProfile();
 }
 
 export async function deleteReferencePost(id: number) {
-  db.delete(schema.referencePosts).where(eq(schema.referencePosts.id, id)).run();
+  await db.delete(schema.referencePosts).where(eq(schema.referencePosts.id, id));
   await rebuildReferenceProfile();
 }
 
-export function hasReferencePosts(): boolean {
-  return db
-    .select()
-    .from(schema.referencePosts)
-    .all()
-    .some((p) => p.gistEn);
+export async function hasReferencePosts(): Promise<boolean> {
+  return (await db.select({ gistEn: schema.referencePosts.gistEn }).from(schema.referencePosts)).some((p) => p.gistEn);
+}
+
+async function analysedPosts(limit: number): Promise<{ settings: Settings | undefined; posts: ReferencePost[] }> {
+  const [[settings], posts] = await Promise.all([
+    db.select().from(schema.settings).where(eq(schema.settings.id, 1)),
+    db.select().from(schema.referencePosts),
+  ]);
+  return { settings, posts: posts.filter((p) => p.gistEn).slice(0, limit) };
 }
 
 const themesSchema = z.object({
@@ -145,13 +144,7 @@ const themesSchema = z.object({
 
 /** English search themes that would surface items like the owner's top posts. */
 export async function similarSearchThemes(max: number) {
-  const settings = db.select().from(schema.settings).where(eq(schema.settings.id, 1)).get();
-  const posts = db
-    .select()
-    .from(schema.referencePosts)
-    .all()
-    .filter((p) => p.gistEn)
-    .slice(0, 30);
+  const { settings, posts } = await analysedPosts(30);
   if (!posts.length) throw new Error("Add your top Threads posts in Settings first");
   const { themes } = await aiObject(themesSchema, {
     instructions: `From a creator's best-performing posts, derive up to ${max} distinct English search themes that would find fresh news or posts they could turn into similar content. Prefer the themes that appear most often.`,
@@ -165,14 +158,8 @@ export async function similarSearchThemes(max: number) {
 }
 
 /** Block added to the judge's instructions; empty when there are no top posts. */
-export function referenceBlock(): string {
-  const settings = db.select().from(schema.settings).where(eq(schema.settings.id, 1)).get();
-  const posts: ReferencePost[] = db
-    .select()
-    .from(schema.referencePosts)
-    .all()
-    .filter((p) => p.gistEn)
-    .slice(0, 20);
+export async function referenceBlock(): Promise<string> {
+  const { settings, posts } = await analysedPosts(20);
   if (!posts.length) return "";
   return [
     "The owner's best-performing posts (translated to English). Items that would make a similar post (same kind of topic, angle or hook) deserve a HIGHER importance; set matchesTop=true for them and mention the similarity in the reason.",

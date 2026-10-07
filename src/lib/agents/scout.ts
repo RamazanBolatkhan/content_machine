@@ -87,21 +87,13 @@ function fromNews(item: NewsItem, source: SourceType, topicId: number | null): C
 
 // ---------- filters ----------
 
-function knownIds(ids: string[]): Set<string> {
+async function knownIds(ids: string[]): Promise<Set<string>> {
   if (!ids.length) return new Set();
-  const seen = db
-    .select({ id: schema.seenItems.sourceId })
-    .from(schema.seenItems)
-    .where(inArray(schema.seenItems.sourceId, ids))
-    .all()
-    .map((r) => r.id);
-  const drafted = db
-    .select({ id: schema.drafts.sourceId })
-    .from(schema.drafts)
-    .where(inArray(schema.drafts.sourceId, ids))
-    .all()
-    .map((r) => r.id);
-  return new Set([...seen, ...drafted]);
+  const [seen, drafted] = await Promise.all([
+    db.select({ id: schema.seenItems.sourceId }).from(schema.seenItems).where(inArray(schema.seenItems.sourceId, ids)),
+    db.select({ id: schema.drafts.sourceId }).from(schema.drafts).where(inArray(schema.drafts.sourceId, ids)),
+  ]);
+  return new Set([...seen, ...drafted].map((r) => r.id));
 }
 
 function isBlocked(c: Candidate, blocklist: string[]): boolean {
@@ -207,8 +199,7 @@ function recentStories() {
     .from(schema.drafts)
     .where(gte(schema.drafts.createdAt, new Date(Date.now() - 72 * 3600_000)))
     .orderBy(desc(schema.drafts.createdAt))
-    .limit(60)
-    .all();
+    .limit(60);
 }
 
 /**
@@ -219,8 +210,7 @@ async function judge(
   candidates: Candidate[],
   opts: { curated: boolean; topics: Topic[]; settings: Settings; similarOnly?: boolean },
 ) {
-  const recent = recentStories();
-  const topPosts = referenceBlock();
+  const [recent, topPosts] = await Promise.all([recentStories(), referenceBlock()]);
   const results: { candidate: Candidate; j: Judgement }[] = [];
 
   for (let start = 0; start < candidates.length; start += BATCH_SIZE) {
@@ -309,7 +299,7 @@ async function saveDrafts(
   opts: { curated: boolean; topics: Topic[]; settings: Settings },
 ): Promise<number> {
   const topicIds = new Set(opts.topics.map((g) => g.id));
-  const existingStories = new Set(recentStories().map((r) => r.storyKey));
+  const existingStories = new Set((await recentStories()).map((r) => r.storyKey));
 
   // Pick what to save: everything (curated) or the best item per story we don't have yet
   const chosen = new Map<string, { candidate: Candidate; j: Judgement }>();
@@ -354,8 +344,8 @@ async function saveDrafts(
     }
     const topicId = c.topicId ?? (j.topicId != null && topicIds.has(j.topicId) ? j.topicId : null);
 
-    return db.transaction((tx) => {
-      const draft = tx
+    return db.transaction(async (tx) => {
+      const [draft] = await tx
         .insert(schema.drafts)
         .values({
           sourceId: c.sourceId,
@@ -375,13 +365,12 @@ async function saveDrafts(
           status: recommended ? "new" : "rejected",
         })
         .onConflictDoNothing()
-        .returning({ id: schema.drafts.id })
-        .get();
+        .returning({ id: schema.drafts.id });
       if (!draft) return false;
       if (texts.length) {
-        tx.insert(schema.draftVersions)
-          .values(texts.map(([lang, text]) => ({ draftId: draft.id, lang, text, source: "ai_scout" as const })))
-          .run();
+        await tx
+          .insert(schema.draftVersions)
+          .values(texts.map(([lang, text]) => ({ draftId: draft.id, lang, text, source: "ai_scout" as const })));
       }
       return recommended;
     });
@@ -390,10 +379,10 @@ async function saveDrafts(
   // Remember every judged item so the AI never sees it twice
   const seen = judged.filter(({ candidate }) => !unwritten.has(candidate.sourceId));
   if (seen.length) {
-    db.insert(schema.seenItems)
+    await db
+      .insert(schema.seenItems)
       .values(seen.map(({ candidate }) => ({ sourceId: candidate.sourceId })))
-      .onConflictDoNothing()
-      .run();
+      .onConflictDoNothing();
   }
   return results.filter(Boolean).length;
 }
@@ -406,18 +395,18 @@ async function logged(
   label: string,
   fn: (r: RunResult) => Promise<void>,
 ): Promise<RunResult> {
-  const run = db
+  const [run] = await db
     .insert(schema.scoutRuns)
     .values({ kind, topicId, startedAt: new Date() })
-    .returning({ id: schema.scoutRuns.id })
-    .get();
+    .returning({ id: schema.scoutRuns.id });
   const result: RunResult = { label, read: 0, candidates: 0, saved: 0, warnings: [] };
   try {
     await fn(result);
   } catch (err) {
     result.error = err instanceof Error ? err.message : String(err);
   }
-  db.update(schema.scoutRuns)
+  await db
+    .update(schema.scoutRuns)
     .set({
       finishedAt: new Date(),
       itemsRead: result.read,
@@ -426,13 +415,12 @@ async function logged(
       warnings: result.warnings.join("\n"),
       error: result.error ?? null,
     })
-    .where(eq(schema.scoutRuns.id, run.id))
-    .run();
+    .where(eq(schema.scoutRuns.id, run.id));
   return result;
 }
 
-function enabledTopics(): Topic[] {
-  return db.select().from(schema.topics).where(eq(schema.topics.enabled, true)).all();
+function enabledTopics(): Promise<Topic[]> {
+  return db.select().from(schema.topics).where(eq(schema.topics.enabled, true));
 }
 
 // ---------- public entry points ----------
@@ -440,11 +428,11 @@ function enabledTopics(): Topic[] {
 /** Import new X bookmarks: every one becomes a draft. */
 export async function syncBookmarks(): Promise<RunResult> {
   return logged("bookmarks", null, "X bookmarks", async (r) => {
-    const settings = getSettings();
-    const topics = enabledTopics();
+    const settings = await getSettings();
+    const topics = await enabledTopics();
     const posts = await fetchNewBookmarks(
       settings.bookmarksPerSync,
-      (id) => knownIds([`x:${id}`]).size > 0,
+      async (id) => (await knownIds([`x:${id}`])).size > 0,
       (message) => r.warnings.push(message),
     );
     if (!posts.length && !r.warnings.length) r.warnings.push("No new bookmarks since the last import");
@@ -464,9 +452,9 @@ export async function importCuratedPosts(posts: XPost[], topics: Topic[], settin
 
 /** Find news for each enabled topic (or one topic) from RSS, Claude web search and, if enabled, paid X search. */
 export async function findNews(topicId?: number): Promise<RunResult[]> {
-  const settings = getSettings();
-  const topics = enabledTopics().filter((g) => !topicId || g.id === topicId);
-  const allTopics = enabledTopics();
+  const settings = await getSettings();
+  const topics = (await enabledTopics()).filter((g) => !topicId || g.id === topicId);
+  const allTopics = await enabledTopics();
 
   // Fetch each feed once per run, even if several topics use it
   const feedCache = new Map<string, Promise<NewsItem[]>>();
@@ -526,7 +514,7 @@ export async function findNews(topicId?: number): Promise<RunResult[]> {
 
         // De-duplicate, drop known / old / blocked
         const unique = [...new Map(candidates.map((c) => [c.sourceId, c])).values()];
-        const known = knownIds(unique.map((c) => c.sourceId));
+        const known = await knownIds(unique.map((c) => c.sourceId));
         const minDate = Date.now() - settings.maxAgeHours * 3600_000;
         const blocklist = lines(settings.blocklist);
         const usable = unique
@@ -560,8 +548,8 @@ export async function findNews(topicId?: number): Promise<RunResult[]> {
  */
 export async function findLikeTopPosts(): Promise<RunResult> {
   return logged("similar", null, "Like my top posts", async (r) => {
-    const settings = getSettings();
-    const topics = enabledTopics();
+    const settings = await getSettings();
+    const topics = await enabledTopics();
     const themes = await similarSearchThemes(4);
     const candidates: Candidate[] = [];
     const useX = settings.xSearchEnabled && xConfigured();
@@ -609,7 +597,7 @@ export async function findLikeTopPosts(): Promise<RunResult> {
     r.read = candidates.length;
 
     const unique = [...new Map(candidates.map((c) => [c.sourceId, c])).values()];
-    const known = knownIds(unique.map((c) => c.sourceId));
+    const known = await knownIds(unique.map((c) => c.sourceId));
     const minDate = Date.now() - sinceHours * 3600_000;
     const blocklist = lines(settings.blocklist);
     const fresh = unique

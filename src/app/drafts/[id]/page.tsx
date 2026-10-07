@@ -18,10 +18,9 @@ const STATUS_LABEL = { new: "New", approved: "Approved", rejected: "Rejected", p
 export default async function DraftPage({ params }: PageProps<"/drafts/[id]">) {
   await connection();
   const { id } = await params;
-  const found = getDraft(Number(id));
+  const [found, settings] = await Promise.all([getDraft(Number(id)), getSettings()]);
   if (!found) notFound();
   const { draft, versions, topicName } = found;
-  const settings = getSettings();
   const m = draft.metrics;
   const isX = draft.source === "x_bookmark" || draft.source === "x_search";
   const credit = isX ? `@${draft.authorHandle}` : draft.sourceName;

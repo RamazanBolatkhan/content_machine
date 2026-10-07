@@ -1,37 +1,50 @@
 "use client";
 
 import { ArrowUpRight, CircleAlert, LoaderCircle, Plus, RefreshCw, Sparkles, Trash2 } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useActionState, useState, useTransition } from "react";
-import {
-  addTopPostsAction,
-  deleteTopPostAction,
-  rebuildProfileAction,
-  setTopPostTextAction,
-  type TopPostsState,
-} from "@/app/actions";
+import { useState } from "react";
 import type { ReferencePost } from "@/db/schema";
+import type { AddResult } from "@/lib/agents/reference";
+import { jobLabel, useJob } from "./useJob";
 
 export function TopPostsSection({ posts, profile }: { posts: ReferencePost[]; profile: string }) {
-  const [state, addAction, adding] = useActionState<TopPostsState, FormData>(addTopPostsAction, null);
+  const add = useJob<AddResult>();
+  const [urls, setUrls] = useState("");
+  const [note, setNote] = useState("");
+  const [formError, setFormError] = useState<string | null>(null);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    const list = urls.split(/\s+/).map((u) => u.trim()).filter(Boolean);
+    if (!list.length) return setFormError("Paste at least one Threads link");
+    setFormError(null);
+    const res = await add.run("add_top_posts", { urls: list.slice(0, 30), note: note.trim() });
+    if (res.status === "done") {
+      setUrls("");
+      setNote("");
+    }
+  }
+
+  const result = add.state.status === "done" ? add.state.result : undefined;
+  const error = formError ?? (add.state.status === "error" ? add.state.error : null);
 
   return (
     <div className="space-y-6">
-      <form action={addAction} className="card space-y-4 p-6">
+      <form onSubmit={submit} className="card space-y-4 p-6">
         <div>
           <label htmlFor="top-urls" className="field-label">
             Threads links
           </label>
           <textarea
             id="top-urls"
-            name="urls"
             className="input t-small min-h-28 font-mono"
-            placeholder={"https://www.threads.com/@you/post/ABC123\nhttps://www.threads.com/@you/post/DEF456"}
-            disabled={adding}
-            required
+            placeholder={"https://www.threads.com/@you/post/ABC123\nhttps://www.threads.com/t/DEF456"}
+            value={urls}
+            onChange={(e) => setUrls(e.target.value)}
+            disabled={add.busy}
           />
           <p className="field-hint">
-            One per line, any language. The app reads each public post and Claude explains in English why it worked.
+            One per line, any language, full or short (/t/…) links. The app reads each public post and Claude explains in
+            English why it worked.
           </p>
         </div>
         <div className="max-w-md">
@@ -40,27 +53,28 @@ export function TopPostsSection({ posts, profile }: { posts: ReferencePost[]; pr
           </label>
           <input
             id="top-note"
-            name="note"
             className="input"
             placeholder="e.g. 120k views, best post of the month"
-            disabled={adding}
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            disabled={add.busy}
           />
         </div>
-        <button className="btn btn-primary" disabled={adding}>
-          {adding ? <LoaderCircle size={16} className="animate-spin" aria-hidden /> : <Plus size={16} aria-hidden />}
-          {adding ? "Reading and analysing…" : "Add posts"}
+        <button className="btn btn-primary" disabled={add.busy}>
+          {add.busy ? <LoaderCircle size={16} className="animate-spin" aria-hidden /> : <Plus size={16} aria-hidden />}
+          {add.busy ? jobLabel(add.state, "Reading and analysing…") : "Add posts"}
         </button>
-        {state?.error && (
+        {error && (
           <p className="t-small flex items-start gap-2 font-semibold" role="alert">
-            <CircleAlert size={16} className="mt-0.5 shrink-0" aria-hidden /> {state.error}
+            <CircleAlert size={16} className="mt-0.5 shrink-0" aria-hidden /> {error}
           </p>
         )}
-        {state?.result && (
+        {result && (
           <p className="t-small text-muted" role="status">
-            Added {state.result.added}
-            {state.result.needsText > 0 && ` · ${state.result.needsText} need their text pasted below`}
-            {state.result.duplicates > 0 && ` · ${state.result.duplicates} already in the list`}
-            {state.result.invalid.length > 0 && ` · not Threads post links: ${state.result.invalid.join(", ")}`}
+            Added {result.added}
+            {result.needsText > 0 && ` · ${result.needsText} need their text pasted below`}
+            {result.duplicates > 0 && ` · ${result.duplicates} already in the list`}
+            {result.invalid.length > 0 && ` · not Threads post links: ${result.invalid.join(", ")}`}
           </p>
         )}
       </form>
@@ -79,9 +93,7 @@ export function TopPostsSection({ posts, profile }: { posts: ReferencePost[]; pr
 }
 
 function Profile({ profile, hasPosts }: { profile: string; hasPosts: boolean }) {
-  const router = useRouter();
-  const [pending, start] = useTransition();
-  const [error, setError] = useState<string | null>(null);
+  const { state, run, busy } = useJob();
   if (!hasPosts) return null;
   return (
     <div className="infobox flex-col gap-3">
@@ -89,40 +101,26 @@ function Profile({ profile, hasPosts }: { profile: string; hasPosts: boolean }) 
         <span className="t-h7 flex items-center gap-2">
           <Sparkles size={16} aria-hidden /> What works for your audience
         </span>
-        <button
-          type="button"
-          className="btn btn-secondary btn-sm"
-          disabled={pending}
-          onClick={() =>
-            start(async () => {
-              const res = await rebuildProfileAction();
-              setError(res.error ?? null);
-              router.refresh();
-            })
-          }
-        >
-          {pending ? (
-            <LoaderCircle size={14} className="animate-spin" aria-hidden />
-          ) : (
-            <RefreshCw size={14} aria-hidden />
-          )}
-          Regenerate
+        <button type="button" className="btn btn-secondary btn-sm" disabled={busy} onClick={() => run("rebuild_profile")}>
+          {busy ? <LoaderCircle size={14} className="animate-spin" aria-hidden /> : <RefreshCw size={14} aria-hidden />}
+          {busy ? jobLabel(state, "Rebuilding…") : "Regenerate"}
         </button>
       </div>
       <p className="whitespace-pre-wrap">{profile || "Not built yet. Press Regenerate."}</p>
       <p className="t-caption text-muted">
         When scoring, Claude ranks items like these higher and marks them “Like your top posts”.
       </p>
-      {error && <p className="font-semibold">{error}</p>}
+      {state.status === "error" && <p className="font-semibold">{state.error}</p>}
     </div>
   );
 }
 
 function TopPostCard({ post }: { post: ReferencePost }) {
-  const router = useRouter();
-  const [pending, start] = useTransition();
+  const save = useJob();
+  const remove = useJob();
   const [text, setText] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const busy = save.busy || remove.busy;
+  const error = [save.state, remove.state].find((s) => s.status === "error")?.error;
 
   return (
     <li className="card flex flex-col gap-3 p-6">
@@ -131,6 +129,7 @@ function TopPostCard({ post }: { post: ReferencePost }) {
         {post.authorHandle && <span className="font-semibold">@{post.authorHandle}</span>}
         {post.stats && <span className="text-muted">{post.stats}</span>}
         {post.note && <span className="text-muted">· {post.note}</span>}
+        {!post.gistEn && post.status === "ok" && <span className="text-muted">· analysing…</span>}
       </div>
 
       {post.status === "needs_text" ? (
@@ -139,25 +138,15 @@ function TopPostCard({ post }: { post: ReferencePost }) {
             <CircleAlert size={16} className="mt-0.5 shrink-0" aria-hidden />
             Couldn’t read this post{post.error ? ` (${post.error})` : ""}. Paste its text:
           </p>
-          <textarea
-            className="input t-small min-h-24"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            disabled={pending}
-          />
+          <textarea className="input t-small min-h-24" value={text} onChange={(e) => setText(e.target.value)} disabled={busy} />
           <button
             type="button"
             className="btn btn-primary btn-sm"
-            disabled={pending || !text.trim()}
-            onClick={() =>
-              start(async () => {
-                const res = await setTopPostTextAction(post.id, text);
-                setError(res.error ?? null);
-                router.refresh();
-              })
-            }
+            disabled={busy || !text.trim()}
+            onClick={() => save.run("set_top_text", { id: post.id, text })}
           >
-            {pending && <LoaderCircle size={14} className="animate-spin" aria-hidden />} Save text
+            {save.busy && <LoaderCircle size={14} className="animate-spin" aria-hidden />}
+            {save.busy ? jobLabel(save.state, "Saving…") : "Save text"}
           </button>
         </div>
       ) : (
@@ -187,15 +176,10 @@ function TopPostCard({ post }: { post: ReferencePost }) {
         <button
           type="button"
           className="btn btn-ghost btn-sm"
-          disabled={pending}
-          onClick={() =>
-            start(async () => {
-              await deleteTopPostAction(post.id);
-              router.refresh();
-            })
-          }
+          disabled={busy}
+          onClick={() => remove.run("delete_top_post", { id: post.id })}
         >
-          <Trash2 size={14} aria-hidden /> Remove
+          <Trash2 size={14} aria-hidden /> {remove.busy ? jobLabel(remove.state, "Removing…") : "Remove"}
         </button>
       </div>
     </li>

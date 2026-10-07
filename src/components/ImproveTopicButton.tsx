@@ -1,18 +1,15 @@
 "use client";
 
 import { CircleAlert, LoaderCircle, Sparkles } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
-import { improveTopicAction } from "@/app/actions";
 import type { TopicSetupResult } from "@/lib/agents/topic-setup";
 import { formatCount } from "@/lib/util";
+import { jobLabel, useJob } from "./useJob";
 
 /** Claude researches keywords, X accounts and feeds; the app verifies them and adds the good ones. */
 export function ImproveTopicButton({ topicId }: { topicId: number }) {
-  const router = useRouter();
-  const [pending, start] = useTransition();
-  const [result, setResult] = useState<TopicSetupResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { state, run, busy: pending } = useJob<TopicSetupResult>();
+  const result = state.status === "done" ? (state.result ?? null) : null;
+  const error = state.status === "error" ? (state.error ?? "Something went wrong") : null;
 
   return (
     <div className="space-y-3">
@@ -20,19 +17,10 @@ export function ImproveTopicButton({ topicId }: { topicId: number }) {
         type="button"
         className="btn btn-secondary"
         disabled={pending}
-        onClick={() =>
-          start(async () => {
-            setError(null);
-            setResult(null);
-            const res = await improveTopicAction(topicId);
-            if (res.error) setError(res.error);
-            if (res.result) setResult(res.result);
-            router.refresh();
-          })
-        }
+        onClick={() => run("improve_topic", { topicId })}
       >
         {pending ? <LoaderCircle size={16} className="animate-spin" aria-hidden /> : <Sparkles size={16} aria-hidden />}
-        {pending ? "Researching… (1–3 min)" : "Improve with AI"}
+        {pending ? jobLabel(state, "Researching… (1–3 min)") : "Improve with AI"}
       </button>
 
       {error && (

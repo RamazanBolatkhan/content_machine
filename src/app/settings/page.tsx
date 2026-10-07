@@ -4,11 +4,10 @@ import { deleteTopic, disconnectXAction, saveSettings, saveTopic } from "@/app/a
 import type { Topic } from "@/db/schema";
 import { ImproveTopicButton } from "@/components/ImproveTopicButton";
 import { TopPostsSection } from "@/components/TopPostsSection";
-import { AI_PROVIDER, aiConfigured, aiSetupHint, DEFAULT_STYLE } from "@/lib/ai";
+import { DEFAULT_STYLE } from "@/lib/ai";
 import { LANGUAGES } from "@/lib/languages";
-import { getReferencePosts, getSettings, getTopics, recentRuns } from "@/lib/queries";
+import { getReferencePosts, getSettings, getTopics, getWorker, recentRuns } from "@/lib/queries";
 import { redirectUri, xAccount, xLoginConfigured } from "@/lib/x/auth";
-import { xConfigured } from "@/lib/x/client";
 
 // Reads the local database on every request
 export const instant = false;
@@ -32,10 +31,16 @@ const SECTIONS = [
 export default async function SettingsPage({ searchParams }: PageProps<"/settings">) {
   await connection();
   const sp = await searchParams;
-  const topics = getTopics();
-  const s = getSettings();
-  const runs = recentRuns();
-  const account = xAccount();
+  const [topics, s, runs, account, worker, topPosts] = await Promise.all([
+    getTopics(),
+    getSettings(),
+    recentRuns(),
+    xAccount(),
+    getWorker(),
+    getReferencePosts(),
+  ]);
+  // On Vercel the X login can't run (its callback is http://127.0.0.1:3000)
+  const hosted = process.env.VERCEL === "1";
 
   return (
     <div className="space-y-8">
@@ -56,15 +61,37 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
       <Section id="connections" title="Connections">
         <div className="grid gap-6 md:grid-cols-2">
           <div className="card space-y-3 p-6">
-            <h3 className="t-h6">AI</h3>
-            {aiConfigured() ? (
-              <Status ok>
-                {AI_PROVIDER === "claude-code"
-                  ? "Claude Code on your subscription (no API cost)"
-                  : "Vercel AI Gateway (paid per token)"}
-              </Status>
+            <h3 className="t-h6">Your Mac worker</h3>
+            {worker.online && worker.info ? (
+              <>
+                <Status ok>
+                  Online on <span className="font-semibold">{worker.info.host}</span>
+                </Status>
+                {worker.info.ai ? (
+                  <Status ok>
+                    {worker.info.aiProvider === "claude-code"
+                      ? "AI: Claude Code on your subscription (no API cost)"
+                      : "AI: Vercel AI Gateway (paid per token)"}
+                  </Status>
+                ) : (
+                  <Status>AI: {worker.info.aiHint}</Status>
+                )}
+                {worker.info.xSearch ? (
+                  <Status ok>X search: Bearer Token set</Status>
+                ) : (
+                  <Status>X search: set X_BEARER_TOKEN in .env.local on your Mac</Status>
+                )}
+              </>
             ) : (
-              <Status>{aiSetupHint()}</Status>
+              <>
+                <Status>
+                  Offline{worker.lastSeen ? ` (last seen ${worker.lastSeen.toLocaleString()})` : ""}
+                </Status>
+                <p className="t-small text-muted">
+                  Searching, writing and AI edits run on your Mac. Start it with <code>npm run dev</code> (or{" "}
+                  <code>npm run worker</code>) in the project folder. Until then, jobs wait in the queue.
+                </p>
+              </>
             )}
           </div>
 
@@ -79,6 +106,11 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
                 </Status>
                 <button className="btn btn-secondary btn-sm">Disconnect</button>
               </form>
+            ) : hosted ? (
+              <p className="t-small text-muted">
+                Connect X from the app on your Mac: run <code>npm run dev</code> and open{" "}
+                <code>http://127.0.0.1:3000/settings</code>. The login is saved in the shared database.
+              </p>
             ) : xLoginConfigured() ? (
               <a href="/api/x/login" className="btn btn-primary">
                 Connect X account
@@ -87,15 +119,6 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
               <p className="t-small text-muted">
                 Set <code>X_CLIENT_ID</code> in <code>.env.local</code>, and add the callback URL{" "}
                 <code>{redirectUri()}</code> in the X console.
-              </p>
-            )}
-            <div className="divider" />
-            <h3 className="t-h6">X search</h3>
-            {xConfigured() ? (
-              <Status ok>Bearer Token set</Status>
-            ) : (
-              <p className="t-small text-muted">
-                Set <code>X_BEARER_TOKEN</code> in <code>.env.local</code> to search X posts.
               </p>
             )}
           </div>
@@ -122,7 +145,7 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
         title="Top Threads posts"
         text="Links to your best-performing posts, in any language. Claude learns what works for your audience and scores similar items higher."
       >
-        <TopPostsSection posts={getReferencePosts()} profile={s.referenceProfile} />
+        <TopPostsSection posts={topPosts} profile={s.referenceProfile} />
       </Section>
 
       <form action={saveSettings} className="space-y-8">
@@ -134,7 +157,7 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
                 name="xSearchEnabled"
                 checked={s.xSearchEnabled}
                 label="X post search"
-                hint={`Posts from your accounts to watch, keyword posts above min likes, and X News. About $0.005 per post read.${xConfigured() ? "" : " Needs X_BEARER_TOKEN."}`}
+                hint="Posts from your accounts to watch, keyword posts above min likes, and X News. About $0.005 per post read. Needs X_BEARER_TOKEN on your Mac."
               />
               <Toggle
                 name="rssEnabled"

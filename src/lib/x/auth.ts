@@ -22,33 +22,34 @@ function clientId(): string {
   return id;
 }
 
-function getRow() {
-  db.insert(schema.xAuth).values({ id: 1 }).onConflictDoNothing().run();
-  return db.select().from(schema.xAuth).where(eq(schema.xAuth.id, 1)).get()!;
+async function getRow() {
+  await db.insert(schema.xAuth).values({ id: 1 }).onConflictDoNothing();
+  const [row] = await db.select().from(schema.xAuth).where(eq(schema.xAuth.id, 1));
+  return row;
 }
 
-function saveRow(values: Partial<typeof schema.xAuth.$inferInsert>) {
-  getRow();
-  db.update(schema.xAuth).set(values).where(eq(schema.xAuth.id, 1)).run();
+async function saveRow(values: Partial<typeof schema.xAuth.$inferInsert>) {
+  await getRow();
+  await db.update(schema.xAuth).set(values).where(eq(schema.xAuth.id, 1));
 }
 
-export function xAccount(): { username: string } | null {
-  const row = getRow();
+export async function xAccount(): Promise<{ username: string } | null> {
+  const row = await getRow();
   return row.refreshToken && row.username ? { username: row.username } : null;
 }
 
-export function disconnectX() {
-  saveRow({ userId: null, username: null, accessToken: null, refreshToken: null, expiresAt: null });
+export async function disconnectX() {
+  await saveRow({ userId: null, username: null, accessToken: null, refreshToken: null, expiresAt: null });
 }
 
 const base64url = (buf: Buffer) => buf.toString("base64url");
 
 /** Start login: remember state + PKCE verifier, return X's authorize URL. */
-export function buildAuthorizeUrl(): string {
+export async function buildAuthorizeUrl(): Promise<string> {
   const state = base64url(crypto.randomBytes(16));
   const codeVerifier = base64url(crypto.randomBytes(32));
   const challenge = base64url(crypto.createHash("sha256").update(codeVerifier).digest());
-  saveRow({ oauthState: state, codeVerifier });
+  await saveRow({ oauthState: state, codeVerifier });
 
   const url = new URL(AUTHORIZE_URL);
   url.search = new URLSearchParams({
@@ -81,8 +82,8 @@ async function tokenRequest(params: Record<string, string>): Promise<TokenRespon
   return body as TokenResponse;
 }
 
-function saveTokens(t: TokenResponse) {
-  saveRow({
+async function saveTokens(t: TokenResponse) {
+  await saveRow({
     accessToken: t.access_token,
     // X rotates refresh tokens: always keep the newest one
     ...(t.refresh_token ? { refreshToken: t.refresh_token } : {}),
@@ -92,7 +93,7 @@ function saveTokens(t: TokenResponse) {
 
 /** Finish login: exchange the code, then look up who logged in. */
 export async function completeLogin(code: string, state: string) {
-  const row = getRow();
+  const row = await getRow();
   if (!row.oauthState || state !== row.oauthState || !row.codeVerifier) {
     throw new Error("Login expired or state mismatch. Try connecting again.");
   }
@@ -102,25 +103,25 @@ export async function completeLogin(code: string, state: string) {
     redirect_uri: redirectUri(),
     code_verifier: row.codeVerifier,
   });
-  saveTokens(tokens);
-  saveRow({ oauthState: null, codeVerifier: null });
+  await saveTokens(tokens);
+  await saveRow({ oauthState: null, codeVerifier: null });
 
   const res = await fetch("https://api.x.com/2/users/me", {
     headers: { Authorization: `Bearer ${tokens.access_token}` },
   });
   const me = (await res.json().catch(() => ({}))) as { data?: { id: string; username: string } };
   if (!res.ok || !me.data) throw new Error(`Could not read your X account (${res.status})`);
-  saveRow({ userId: me.data.id, username: me.data.username });
+  await saveRow({ userId: me.data.id, username: me.data.username });
 }
 
 /** A valid access token + user id, refreshing the token when it has expired. */
 export async function getXSession(): Promise<{ accessToken: string; userId: string }> {
-  const row = getRow();
+  const row = await getRow();
   if (!row.refreshToken || !row.userId) throw new Error("X account not connected (Settings → Connect X)");
   if (row.accessToken && row.expiresAt && row.expiresAt.getTime() > Date.now()) {
     return { accessToken: row.accessToken, userId: row.userId };
   }
   const tokens = await tokenRequest({ grant_type: "refresh_token", refresh_token: row.refreshToken });
-  saveTokens(tokens);
+  await saveTokens(tokens);
   return { accessToken: tokens.access_token, userId: row.userId };
 }

@@ -10,7 +10,7 @@ export function MediaGrid({ media, small = false }: { media: MediaItem[]; small?
   return (
     <div className={`grid gap-2 ${media.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
       {media.map((m, i) => {
-        const local = m.file ? `/api/media/${m.file}` : null;
+        const local = m.file; // our copy on Vercel Blob
         const isVideo = m.type !== "photo";
         const cls = `w-full rounded-xl border border-line bg-surface object-cover ${small ? "h-40" : "max-h-[420px]"}`;
 

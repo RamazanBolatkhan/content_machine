@@ -7,7 +7,7 @@ import { parseV2Posts, POST_FIELDS, type V2Payload, type XPost } from "./parse";
  */
 export async function fetchNewBookmarks(
   limit: number,
-  isKnown: (postId: string) => boolean,
+  isKnown: (postId: string) => Promise<boolean>,
   warn: (message: string) => void = () => {},
 ): Promise<XPost[]> {
   const { accessToken, userId } = await getXSession();
@@ -33,7 +33,7 @@ export async function fetchNewBookmarks(
     firstPage = false;
 
     for (const post of posts) {
-      if (isKnown(post.id)) return found; // everything older was imported before
+      if (await isKnown(post.id)) return found; // everything older was imported before
       found.push(post);
     }
     paginationToken = body.meta?.next_token;

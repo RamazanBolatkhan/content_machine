@@ -29,15 +29,21 @@ export default async function DraftsBoard({ searchParams }: PageProps<"/">) {
   const status = (DRAFT_STATUSES as readonly string[]).includes(String(sp.status)) ? (sp.status as DraftStatus) : "new";
   const topicId: number | "none" | undefined = sp.topic === "none" ? "none" : Number(sp.topic) || undefined;
 
-  const topics = getTopics();
-  const langs = enabledLangs(getSettings());
-  const inTopic = listDrafts({ topicId });
+  const [topics, settings, inTopic, noTopic, xConnected, hasTopPosts] = await Promise.all([
+    getTopics(),
+    getSettings(),
+    listDrafts({ topicId }),
+    listDrafts({ topicId: "none" }),
+    xAccount().then((a) => a !== null),
+    hasReferencePosts(),
+  ]);
+  const langs = enabledLangs(settings);
   const drafts = inTopic.filter((d) => d.status === status);
   const counts = Object.fromEntries(DRAFT_STATUSES.map((s) => [s, inTopic.filter((d) => d.status === s).length]));
 
   // Which text the cards show: the original post, or one of the languages
   const view: LangCode | "original" = isLangCode(sp.lang) && langs.includes(sp.lang) ? sp.lang : "original";
-  const hasNoTopic = listDrafts({ topicId: "none" }).length > 0;
+  const hasNoTopic = noTopic.length > 0;
   const href = (s: DraftStatus, t?: number | "none", v: LangCode | "original" = view) => {
     const q = new URLSearchParams({ status: s });
     if (t) q.set("topic", String(t));
@@ -57,8 +63,8 @@ export default async function DraftsBoard({ searchParams }: PageProps<"/">) {
         </div>
         <CollectButtons
           topics={topics.filter((t) => t.enabled).map((t) => ({ id: t.id, name: t.name }))}
-          xConnected={xAccount() !== null}
-          hasTopPosts={hasReferencePosts()}
+          xConnected={xConnected}
+          hasTopPosts={hasTopPosts}
         />
       </div>
 

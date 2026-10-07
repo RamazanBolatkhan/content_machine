@@ -12,7 +12,7 @@ const isXSource = (draft: Draft) => draft.source === "x_bookmark" || draft.sourc
  * and saves the result as a new "ai_edit" version.
  */
 export async function editDraft(draft: Draft, lang: LangCode, currentText: string, instruction: string): Promise<string> {
-  const settings = getSettings();
+  const settings = await getSettings();
   const canBrowse = AI_PROVIDER === "claude-code" && !isXSource(draft);
 
   const text = await aiText({
@@ -42,17 +42,17 @@ export async function editDraft(draft: Draft, lang: LangCode, currentText: strin
 
   const finalText = text.trim();
   if (!finalText) throw new Error("AI returned an empty answer");
-  db.insert(schema.draftVersions)
-    .values({ draftId: draft.id, lang, text: finalText, source: "ai_edit", instruction })
-    .run();
+  await db
+    .insert(schema.draftVersions)
+    .values({ draftId: draft.id, lang, text: finalText, source: "ai_edit", instruction });
   return finalText;
 }
 
 /** Write the enabled languages a draft doesn't have yet (e.g. after enabling a new language). */
 export async function writeMissingLanguages(draftId: number): Promise<number> {
-  const found = getDraft(draftId);
+  const found = await getDraft(draftId);
   if (!found) throw new Error("Draft not found");
-  const settings = getSettings();
+  const settings = await getSettings();
   const have = latestTexts(found.versions);
   const missing = enabledLangs(settings).filter((code) => !have[code]);
   if (!missing.length) return 0;
@@ -71,9 +71,9 @@ export async function writeMissingLanguages(draftId: number): Promise<number> {
   );
   const texts = Object.entries(posts.get(draft.sourceId) ?? {});
   if (texts.length) {
-    db.insert(schema.draftVersions)
-      .values(texts.map(([lang, text]) => ({ draftId, lang, text, source: "ai_scout" as const })))
-      .run();
+    await db
+      .insert(schema.draftVersions)
+      .values(texts.map(([lang, text]) => ({ draftId, lang, text, source: "ai_scout" as const })));
   }
   return texts.length;
 }

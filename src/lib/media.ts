@@ -1,10 +1,8 @@
 import crypto from "node:crypto";
-import fs from "node:fs/promises";
-import path from "node:path";
-import { MEDIA_DIR } from "@/db";
+import { put } from "@vercel/blob";
 import type { MediaItem } from "@/db/schema";
 
-// Bigger files are not downloaded (the draft keeps the link to the original)
+// Bigger files are not stored (the draft keeps the link to the original)
 const MAX_BYTES = 150 * 1024 * 1024;
 
 const EXT: Record<string, string> = {
@@ -15,7 +13,7 @@ const EXT: Record<string, string> = {
   "video/mp4": "mp4",
 };
 
-/** Download a draft's media into data/media. Failed downloads keep file = null. */
+/** Copy a draft's media to Vercel Blob. Failed or too-big files keep file = null. */
 export async function downloadMedia(sourceId: string, items: Omit<MediaItem, "file">[]): Promise<MediaItem[]> {
   const key = crypto.createHash("sha1").update(sourceId).digest("hex").slice(0, 12);
   return Promise.all(
@@ -34,27 +32,21 @@ export async function downloadMedia(sourceId: string, items: Omit<MediaItem, "fi
           throw new Error("file too large");
         }
         const type = res.headers.get("content-type")?.split(";")[0] ?? "";
-        const ext = EXT[type] ?? (item.type === "photo" ? "jpg" : "mp4");
         // A web page instead of a file (blocked hotlink, login wall…)
         if (type.startsWith("text/")) throw new Error(`not media: ${type}`);
-        const file = `${key}_${i + 1}.${ext}`;
-        await fs.writeFile(path.join(MEDIA_DIR, file), Buffer.from(await res.arrayBuffer()));
-        return { ...item, file };
+        const body = Buffer.from(await res.arrayBuffer());
+        if (body.length > MAX_BYTES) throw new Error("file too large");
+        const ext = EXT[type] ?? (item.type === "photo" ? "jpg" : "mp4");
+        const blob = await put(`media/${key}_${i + 1}.${ext}`, body, {
+          access: "public",
+          contentType: type || undefined,
+          addRandomSuffix: true,
+          multipart: body.length > 20 * 1024 * 1024,
+        });
+        return { ...item, file: blob.url };
       } catch {
         return { ...item, file: null };
       }
     }),
   );
-}
-
-/** Resolve a media file name safely inside data/media. */
-export function mediaPath(file: string): string | null {
-  const name = path.basename(file);
-  if (name !== file || name.startsWith(".")) return null;
-  return path.join(MEDIA_DIR, name);
-}
-
-export function contentTypeFor(file: string): string {
-  const ext = path.extname(file).slice(1).toLowerCase();
-  return Object.entries(EXT).find(([, e]) => e === ext)?.[0] ?? "application/octet-stream";
 }

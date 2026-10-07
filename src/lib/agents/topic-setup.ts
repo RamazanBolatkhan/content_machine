@@ -69,7 +69,7 @@ const norm = (s: string) => s.trim().toLowerCase();
  * verify them, and merge the good ones into the topic.
  */
 export async function improveTopic(topicId: number): Promise<TopicSetupResult> {
-  const topic = db.select().from(schema.topics).where(eq(schema.topics.id, topicId)).get() as Topic | undefined;
+  const [topic]: (Topic | undefined)[] = await db.select().from(schema.topics).where(eq(schema.topics.id, topicId));
   if (!topic) throw new Error("Topic not found");
 
   const s = await aiObject(suggestionSchema, {
@@ -127,7 +127,8 @@ export async function improveTopic(topicId: number): Promise<TopicSetupResult> {
 
   const join = (current: string, extra: string[]) => [...lines(current), ...extra].join("\n");
   const descriptionSet = !topic.description.trim() && Boolean(s.description.trim());
-  db.update(schema.topics)
+  await db
+    .update(schema.topics)
     .set({
       keywords: join(topic.keywords, addedKeywords),
       trustedAccounts: join(
@@ -140,8 +141,7 @@ export async function improveTopic(topicId: number): Promise<TopicSetupResult> {
       ),
       ...(descriptionSet ? { description: s.description.trim() } : {}),
     })
-    .where(eq(schema.topics.id, topicId))
-    .run();
+    .where(eq(schema.topics.id, topicId));
 
   return { addedKeywords, addedAccounts, addedFeeds, skippedAccounts, skippedFeeds, descriptionSet };
 }

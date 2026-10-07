@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { DM_Sans } from "next/font/google";
-import { TriangleAlert } from "lucide-react";
 import { LogoMark } from "@/components/Logo";
 import { NavLinks } from "@/components/NavLinks";
-import { aiConfigured, aiSetupHint } from "@/lib/ai";
+import { Suspense } from "react";
+import { WorkerBanner } from "@/components/WorkerBanner";
 import "./globals.css";
 
 // Fallback for "New Transport" (see globals.css)
@@ -16,8 +16,6 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
-  const aiProblem = aiConfigured() ? null : aiSetupHint();
-
   return (
     <html lang="en" className={`${dmSans.variable} antialiased`}>
       <body className="min-h-screen bg-bg font-sans text-fg">
@@ -30,13 +28,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             <NavLinks />
           </nav>
         </header>
-        {aiProblem && (
-          <div className="border-b border-line bg-surface">
-            <p className="t-small mx-auto flex max-w-6xl items-center gap-2 px-4 py-3 md:px-6">
-              <TriangleAlert size={16} aria-hidden /> {aiProblem}. See <code>.env.example</code>.
-            </p>
-          </div>
-        )}
+        <Suspense fallback={null}>
+          <WorkerBanner />
+        </Suspense>
         <main className="mx-auto max-w-6xl px-4 py-8 md:px-6 md:py-10">{children}</main>
       </body>
     </html>

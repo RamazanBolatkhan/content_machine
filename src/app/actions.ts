@@ -3,43 +3,36 @@
 import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 import { db, schema } from "@/db";
-import { DRAFT_STATUSES, type DraftStatus } from "@/db/schema";
-import { findLikeTopPosts, findNews, syncBookmarks, type RunResult } from "@/lib/agents/scout";
-import { writeMissingLanguages } from "@/lib/agents/editor";
-import {
-  addReferencePosts,
-  deleteReferencePost,
-  rebuildReferenceProfile,
-  setReferenceText,
-  type AddResult,
-} from "@/lib/agents/reference";
-import { improveTopic, type TopicSetupResult } from "@/lib/agents/topic-setup";
+import { DRAFT_STATUSES, JOB_KINDS, type DraftStatus, type JobKind } from "@/db/schema";
+import { JOB_PAYLOADS } from "@/lib/jobs/payloads";
 import { isLangCode, LANG_CODES } from "@/lib/languages";
+import { enqueueJob } from "@/lib/queries";
 import { disconnectX } from "@/lib/x/auth";
 
-export type CollectState = { results: RunResult[]; at: number } | null;
+/**
+ * Queue work for the local worker (X + Claude). The page then polls /api/jobs/<id>.
+ * Everything else below writes to the database directly.
+ */
+export async function startJob(kind: JobKind, payload: Record<string, unknown> = {}): Promise<{ jobId?: number; error?: string }> {
+  if (!JOB_KINDS.includes(kind)) return { error: "Unknown job" };
+  const parsed = JOB_PAYLOADS[kind].safeParse(payload);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid request" };
+  return { jobId: await enqueueJob(kind, parsed.data as Record<string, unknown>) };
+}
 
-export async function collectAction(_prev: CollectState, formData: FormData): Promise<CollectState> {
-  const kind = formData.get("kind");
-  const results =
-    kind === "bookmarks"
-      ? [await syncBookmarks()]
-      : kind === "similar"
-        ? [await findLikeTopPosts()]
-        : await findNews(Number(formData.get("topicId")) || undefined);
+export async function refreshAfterJob() {
   revalidatePath("/");
   revalidatePath("/settings");
-  return { results, at: Date.now() };
 }
 
 export async function disconnectXAction() {
-  disconnectX();
+  await disconnectX();
   revalidatePath("/settings");
 }
 
 export async function setDraftStatus(draftId: number, status: DraftStatus) {
   if (!DRAFT_STATUSES.includes(status)) throw new Error("Bad status");
-  db.update(schema.drafts).set({ status }).where(eq(schema.drafts.id, draftId)).run();
+  await db.update(schema.drafts).set({ status }).where(eq(schema.drafts.id, draftId));
   revalidatePath("/");
   revalidatePath(`/drafts/${draftId}`);
 }
@@ -47,79 +40,13 @@ export async function setDraftStatus(draftId: number, status: DraftStatus) {
 export async function saveManualVersion(draftId: number, lang: string, value: string) {
   const text = value.trim();
   if (!text || !isLangCode(lang)) return;
-  db.insert(schema.draftVersions).values({ draftId, lang, text, source: "manual" }).run();
+  await db.insert(schema.draftVersions).values({ draftId, lang, text, source: "manual" });
   revalidatePath(`/drafts/${draftId}`);
   revalidatePath("/");
 }
 
-export async function writeMissingLanguagesAction(draftId: number): Promise<{ written: number; error?: string }> {
-  try {
-    const written = await writeMissingLanguages(draftId);
-    revalidatePath(`/drafts/${draftId}`);
-    revalidatePath("/");
-    return { written };
-  } catch (e) {
-    return { written: 0, error: e instanceof Error ? e.message : String(e) };
-  }
-}
-
-export async function improveTopicAction(topicId: number): Promise<{ result?: TopicSetupResult; error?: string }> {
-  try {
-    const result = await improveTopic(topicId);
-    revalidatePath("/settings");
-    return { result };
-  } catch (e) {
-    return { error: e instanceof Error ? e.message : String(e) };
-  }
-}
-
-// ---- Top Threads posts ----
-
-export type TopPostsState = { result?: AddResult; error?: string } | null;
-
-export async function addTopPostsAction(_prev: TopPostsState, formData: FormData): Promise<TopPostsState> {
-  const urls = String(formData.get("urls") ?? "")
-    .split(/\s+/)
-    .map((u) => u.trim())
-    .filter(Boolean);
-  if (!urls.length) return { error: "Paste at least one Threads link" };
-  try {
-    const result = await addReferencePosts(urls.slice(0, 30), String(formData.get("note") ?? "").trim());
-    revalidatePath("/settings");
-    return { result };
-  } catch (e) {
-    return { error: e instanceof Error ? e.message : String(e) };
-  }
-}
-
-export async function setTopPostTextAction(id: number, text: string): Promise<{ error?: string }> {
-  if (!text.trim()) return { error: "Paste the post text" };
-  try {
-    await setReferenceText(id, text);
-    revalidatePath("/settings");
-    return {};
-  } catch (e) {
-    return { error: e instanceof Error ? e.message : String(e) };
-  }
-}
-
-export async function deleteTopPostAction(id: number) {
-  await deleteReferencePost(id);
-  revalidatePath("/settings");
-}
-
-export async function rebuildProfileAction(): Promise<{ error?: string }> {
-  try {
-    await rebuildReferenceProfile();
-    revalidatePath("/settings");
-    return {};
-  } catch (e) {
-    return { error: e instanceof Error ? e.message : String(e) };
-  }
-}
-
 export async function deleteDraft(draftId: number) {
-  db.delete(schema.drafts).where(eq(schema.drafts.id, draftId)).run();
+  await db.delete(schema.drafts).where(eq(schema.drafts.id, draftId));
   revalidatePath("/");
 }
 
@@ -144,21 +71,22 @@ export async function saveTopic(formData: FormData) {
     enabled: formData.get("enabled") === "on",
   };
   if (!values.name) return;
-  if (id) db.update(schema.topics).set(values).where(eq(schema.topics.id, id)).run();
-  else db.insert(schema.topics).values(values).run();
+  if (id) await db.update(schema.topics).set(values).where(eq(schema.topics.id, id));
+  else await db.insert(schema.topics).values(values);
   revalidatePath("/settings");
   revalidatePath("/");
 }
 
 export async function deleteTopic(formData: FormData) {
   const id = Number(formData.get("id"));
-  if (id) db.delete(schema.topics).where(eq(schema.topics.id, id)).run();
+  if (id) await db.delete(schema.topics).where(eq(schema.topics.id, id));
   revalidatePath("/settings");
   revalidatePath("/");
 }
 
 export async function saveSettings(formData: FormData) {
-  db.update(schema.settings)
+  await db
+    .update(schema.settings)
     .set({
       bookmarksPerSync: clamp(int(formData, "bookmarksPerSync", 20), 1, 200),
       rssEnabled: bool(formData, "rssEnabled"),
@@ -177,7 +105,6 @@ export async function saveSettings(formData: FormData) {
       stylePrompt: text(formData, "stylePrompt"),
       glossary: text(formData, "glossary"),
     })
-    .where(eq(schema.settings.id, 1))
-    .run();
+    .where(eq(schema.settings.id, 1));
   revalidatePath("/settings");
 }
