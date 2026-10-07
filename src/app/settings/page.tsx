@@ -3,9 +3,10 @@ import { Check, CircleAlert, Info, Plus, Trash2 } from "lucide-react";
 import { deleteTopic, disconnectXAction, saveSettings, saveTopic } from "@/app/actions";
 import type { Topic } from "@/db/schema";
 import { ImproveTopicButton } from "@/components/ImproveTopicButton";
+import { TopPostsSection } from "@/components/TopPostsSection";
 import { AI_PROVIDER, aiConfigured, aiSetupHint, DEFAULT_STYLE } from "@/lib/ai";
 import { LANGUAGES } from "@/lib/languages";
-import { getSettings, getTopics, recentRuns } from "@/lib/queries";
+import { getReferencePosts, getSettings, getTopics, recentRuns } from "@/lib/queries";
 import { redirectUri, xAccount, xLoginConfigured } from "@/lib/x/auth";
 import { xConfigured } from "@/lib/x/client";
 
@@ -21,6 +22,7 @@ const FEED_EXAMPLES = [
 const SECTIONS = [
   { id: "connections", label: "Connections" },
   { id: "topics", label: "Topics" },
+  { id: "top-posts", label: "Top Threads posts" },
   { id: "sources", label: "Sources" },
   { id: "languages", label: "Languages" },
   { id: "writing", label: "Writing & filters" },
@@ -112,6 +114,15 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
           ))}
           <TopicForm />
         </div>
+      </Section>
+
+      {/* ---------- Top Threads posts ---------- */}
+      <Section
+        id="top-posts"
+        title="Top Threads posts"
+        text="Links to your best-performing posts, in any language. Claude learns what works for your audience and scores similar items higher."
+      >
+        <TopPostsSection posts={getReferencePosts()} profile={s.referenceProfile} />
       </Section>
 
       <form action={saveSettings} className="space-y-8">

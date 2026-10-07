@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { connection } from "next/server";
-import { ArrowRight, Eye, Heart, Inbox, Sparkles } from "lucide-react";
+import { ArrowRight, Eye, Heart, Inbox, Sparkles, Star } from "lucide-react";
 import { DRAFT_STATUSES, type DraftStatus } from "@/db/schema";
 import { CollectButtons } from "@/components/CollectButtons";
 import { MediaGrid } from "@/components/MediaGrid";
@@ -130,9 +130,16 @@ export default async function DraftsBoard({ searchParams }: PageProps<"/">) {
                   <SourceBadge draft={d} />
                   {d.postedAt && <span className="text-muted">{timeAgo(d.postedAt)}</span>}
                 </div>
-                <span className="badge badge-inverse shrink-0" title="AI importance, 1–10">
-                  {d.score}/10
-                </span>
+                <div className="flex shrink-0 flex-col items-end gap-1">
+                  <span className="badge badge-inverse" title="AI importance, 1–10">
+                    {d.score}/10
+                  </span>
+                  {d.matchesTop && (
+                    <span className="badge badge-outline" title="Similar to your best-performing Threads posts">
+                      <Star size={12} aria-hidden /> Like your top posts
+                    </span>
+                  )}
+                </div>
               </header>
 
               <CardText original={d.originalText} texts={d.texts} langs={langs} view={view} />

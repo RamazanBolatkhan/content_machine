@@ -4,6 +4,7 @@ import { db, schema } from "@/db";
 import type { Topic, MediaItem, PostMetrics, Settings, SourceType } from "@/db/schema";
 import { aiObject } from "@/lib/ai";
 import { enabledLangs } from "@/lib/languages";
+import { referenceBlock } from "./reference";
 import { writePosts } from "./writer";
 import { downloadMedia } from "@/lib/media";
 import { fetchFeed, fetchOgImage } from "@/lib/sources/rss";
@@ -183,6 +184,9 @@ const judgementSchema = z.object({
       keep: z.boolean().describe("true if worth publishing as a post"),
       topicId: z.number().int().nullable().describe("Id of the topic from the list this item is about, or null"),
       importance: z.number().int().min(1).max(10).describe("How interesting for the audience, 1–10"),
+      matchesTop: z
+        .boolean()
+        .describe("true if it would make a post like the owner's best-performing posts (false when none are given)"),
       reason: z.string().describe("One short sentence in English: why it is (or isn't) worth posting"),
       storyKey: z
         .string()
@@ -213,6 +217,7 @@ function recentStories() {
  */
 async function judge(candidates: Candidate[], opts: { curated: boolean; topics: Topic[]; settings: Settings }) {
   const recent = recentStories();
+  const topPosts = referenceBlock();
   const results: { candidate: Candidate; j: Judgement }[] = [];
 
   for (let start = 0; start < candidates.length; start += BATCH_SIZE) {
@@ -231,6 +236,7 @@ async function judge(candidates: Candidate[], opts: { curated: boolean; topics: 
               "If an item covers a story in the 'already have' list, reuse that storyKey and set keep=false.",
               "If several items cover the same new story, give them the same storyKey; the app keeps the best.",
             ].join("\n"),
+        topPosts ? `\n${topPosts}` : "Set matchesTop=false (no top posts given).",
       ].join("\n"),
       prompt: [
         "Topics:",
@@ -357,6 +363,7 @@ async function saveDrafts(
           postedAt: c.postedAt,
           metrics: c.metrics,
           score: j.importance,
+          matchesTop: j.matchesTop,
           aiReason: j.reason,
           storyKey: j.storyKey,
           media,

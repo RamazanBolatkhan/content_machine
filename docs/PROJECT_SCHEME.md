@@ -321,3 +321,12 @@ Each AI or hand edit creates a new version, so changes can be undone.
 - **Improve with AI** (`src/lib/agents/topic-setup.ts`): Claude (WebSearch) suggests keywords, accounts and feeds. Feeds must load, have items and have been updated in the last 60 days. Accounts are looked up on X (`/2/users/by`, ~$0.01 each) and need ≥5k followers. Good ones are merged into the topic.
 - Keyword X queries are capped at ~400 characters (X query length limit).
 - **Verified on Psychology:** Improve added 13 keywords, 12 accounts and 5 feeds in 19 s. Find then read 207 items → 57 fresh → 54 saved (25 recommended) in 78 s, about $0.30 of X reads.
+
+## 17. Top Threads posts guide scoring (2026-10-07)
+
+- Owner choices: **one shared list**, and it **boosts similar items** only (no extra searches).
+- `reference_posts` table + `settings.reference_profile` + `drafts.matches_top`.
+- `src/lib/threads.ts`: Threads' oEmbed returns no text, so the app reads the public **embed page** (`<post url>/embed`): `BodyTextContainer` → text, `Timestamp`, first `ActionBarCount` → likes. Unreadable posts become `needs_text`, and the owner pastes the text.
+- `src/lib/agents/reference.ts`: Claude gives each post's language, an English gist and why it worked, then builds a ≤120-word profile. `referenceBlock()` is added to the judge's instructions, and the judge returns `matchesTop`.
+- UI: Settings section "Top Threads posts" (`TopPostsSection`), and a "★ Like your top posts" badge on board cards.
+- **Verified:** read a real post (text + likes). A pasted Russian post → lang ru, English gist and themes. With the profile, the Psychology scoring marked 3 of 27 items as similar, with fitting reasons.

@@ -195,6 +195,12 @@ Go to **Settings → Topics** and add one card per thing you post about. Then pr
 
 Put **general feeds** under **Settings → Sources → General AI news feeds**. Their articles are matched to your topics by keyword. Companies without an RSS feed (e.g. Anthropic) are still covered by Claude web search.
 
+### ⭐ Teach it what works: your top Threads posts
+
+In **Settings → Top Threads posts**, paste links to your best-performing Threads posts, in any language. The app reads each public post through Threads' embed widget (or you paste the text), and Claude explains in English why it worked. Claude then builds a short **"what works for your audience"** profile.
+
+When scoring new items, Claude ranks those that would make a similar post higher and marks them **★ Like your top posts** on the board. No extra X searches, so no extra cost.
+
 **More recipes:** any subreddit `https://www.reddit.com/r/<NAME>/top/.rss?t=day` · any YouTube channel `https://www.youtube.com/feeds/videos.xml?channel_id=<ID>` · most blogs `https://<site>/feed`
 
 ---

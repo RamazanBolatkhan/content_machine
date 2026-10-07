@@ -11,6 +11,10 @@ export function getSettings() {
   return db.select().from(schema.settings).where(eq(schema.settings.id, 1)).get()!;
 }
 
+export function getReferencePosts() {
+  return db.select().from(schema.referencePosts).orderBy(desc(schema.referencePosts.id)).all();
+}
+
 export function getTopics() {
   return db.select().from(schema.topics).orderBy(schema.topics.name).all();
 }

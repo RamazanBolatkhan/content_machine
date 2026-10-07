@@ -58,6 +58,8 @@ export const settings = sqliteTable("settings", {
   stylePrompt: text("style_prompt").notNull().default(""),
   // Terms kept as-is in translation, one per line
   glossary: text("glossary").notNull().default(""),
+  // English summary of what makes the owner's top Threads posts work (built by the AI)
+  referenceProfile: text("reference_profile").notNull().default(""),
 });
 
 export type MediaItem = {
@@ -101,6 +103,8 @@ export const drafts = sqliteTable("drafts", {
   score: real("score").notNull().default(0),
   aiReason: text("ai_reason").notNull().default(""),
   storyKey: text("story_key").notNull().default(""),
+  // The AI thinks this would make a post like the owner's top Threads posts
+  matchesTop: integer("matches_top", { mode: "boolean" }).notNull().default(false),
   media: text("media", { mode: "json" }).$type<MediaItem[]>().notNull().default([]),
   status: text("status", { enum: DRAFT_STATUSES }).notNull().default("new"),
   createdAt: createdAt(),
@@ -158,7 +162,29 @@ export const xAuth = sqliteTable("x_auth", {
   codeVerifier: text("code_verifier"),
 });
 
+export const REFERENCE_STATUSES = ["ok", "needs_text", "error"] as const;
+
+// The owner's best-performing Threads posts (any language), used to score similar items higher
+export const referencePosts = sqliteTable("reference_posts", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  url: text("url").notNull().unique(),
+  authorHandle: text("author_handle").notNull().default(""),
+  // Original text, in the post's own language
+  text: text("text").notNull().default(""),
+  // e.g. "12.8K likes" from the embed, or the owner's own note ("120k views")
+  stats: text("stats").notNull().default(""),
+  note: text("note").notNull().default(""),
+  // Filled in by the AI
+  lang: text("lang").notNull().default(""),
+  gistEn: text("gist_en").notNull().default(""),
+  themes: text("themes").notNull().default(""),
+  status: text("status", { enum: REFERENCE_STATUSES }).notNull().default("ok"),
+  error: text("error"),
+  createdAt: createdAt(),
+});
+
 export type Topic = typeof topics.$inferSelect;
+export type ReferencePost = typeof referencePosts.$inferSelect;
 export type Settings = typeof settings.$inferSelect;
 export type Draft = typeof drafts.$inferSelect;
 export type DraftVersion = typeof draftVersions.$inferSelect;

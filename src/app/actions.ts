@@ -6,6 +6,13 @@ import { db, schema } from "@/db";
 import { DRAFT_STATUSES, type DraftStatus } from "@/db/schema";
 import { findNews, syncBookmarks, type RunResult } from "@/lib/agents/scout";
 import { writeMissingLanguages } from "@/lib/agents/editor";
+import {
+  addReferencePosts,
+  deleteReferencePost,
+  rebuildReferenceProfile,
+  setReferenceText,
+  type AddResult,
+} from "@/lib/agents/reference";
 import { improveTopic, type TopicSetupResult } from "@/lib/agents/topic-setup";
 import { isLangCode, LANG_CODES } from "@/lib/languages";
 import { disconnectX } from "@/lib/x/auth";
@@ -58,6 +65,51 @@ export async function improveTopicAction(topicId: number): Promise<{ result?: To
     const result = await improveTopic(topicId);
     revalidatePath("/settings");
     return { result };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+// ---- Top Threads posts ----
+
+export type TopPostsState = { result?: AddResult; error?: string } | null;
+
+export async function addTopPostsAction(_prev: TopPostsState, formData: FormData): Promise<TopPostsState> {
+  const urls = String(formData.get("urls") ?? "")
+    .split(/\s+/)
+    .map((u) => u.trim())
+    .filter(Boolean);
+  if (!urls.length) return { error: "Paste at least one Threads link" };
+  try {
+    const result = await addReferencePosts(urls.slice(0, 30), String(formData.get("note") ?? "").trim());
+    revalidatePath("/settings");
+    return { result };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+export async function setTopPostTextAction(id: number, text: string): Promise<{ error?: string }> {
+  if (!text.trim()) return { error: "Paste the post text" };
+  try {
+    await setReferenceText(id, text);
+    revalidatePath("/settings");
+    return {};
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+export async function deleteTopPostAction(id: number) {
+  await deleteReferencePost(id);
+  revalidatePath("/settings");
+}
+
+export async function rebuildProfileAction(): Promise<{ error?: string }> {
+  try {
+    await rebuildReferenceProfile();
+    revalidatePath("/settings");
+    return {};
   } catch (e) {
     return { error: e instanceof Error ? e.message : String(e) };
   }
