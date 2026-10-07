@@ -32,13 +32,13 @@ export function CollectButtons({
         <form action={action} className="flex flex-wrap items-center gap-2">
           <input type="hidden" name="kind" value="news" />
           <label className="sr-only" htmlFor="collect-topic">
-            Topic
+            Topic to search
           </label>
           <select id="collect-topic" name="topicId" className="input w-auto rounded-full" style={{ minHeight: 40 }} disabled={pending}>
-            <option value="">All topics</option>
+            <option value="">Search all topics</option>
             {topics.map((t) => (
               <option key={t.id} value={t.id}>
-                {t.name}
+                Search: {t.name}
               </option>
             ))}
           </select>

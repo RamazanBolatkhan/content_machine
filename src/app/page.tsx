@@ -27,7 +27,7 @@ export default async function DraftsBoard({ searchParams }: PageProps<"/">) {
   const status = (DRAFT_STATUSES as readonly string[]).includes(String(sp.status))
     ? (sp.status as DraftStatus)
     : "new";
-  const topicId = Number(sp.topic) || undefined;
+  const topicId: number | "none" | undefined = sp.topic === "none" ? "none" : Number(sp.topic) || undefined;
 
   const topics = getTopics();
   const langs = enabledLangs(getSettings());
@@ -37,7 +37,8 @@ export default async function DraftsBoard({ searchParams }: PageProps<"/">) {
 
   // Which text the cards show: the original post, or one of the languages
   const view: LangCode | "original" = isLangCode(sp.lang) && langs.includes(sp.lang) ? sp.lang : "original";
-  const href = (s: DraftStatus, t?: number, v: LangCode | "original" = view) => {
+  const hasNoTopic = listDrafts({ topicId: "none" }).length > 0;
+  const href = (s: DraftStatus, t?: number | "none", v: LangCode | "original" = view) => {
     const q = new URLSearchParams({ status: s });
     if (t) q.set("topic", String(t));
     if (v !== "original") q.set("lang", v);
@@ -69,7 +70,7 @@ export default async function DraftsBoard({ searchParams }: PageProps<"/">) {
             </Link>
           ))}
         </FilterRow>
-        {topics.length > 1 && (
+        {topics.length > 0 && (
           <FilterRow label="Topic">
             <Link href={href(status)} className={`chip ${!topicId ? "chip-selected" : ""}`}>
               All
@@ -79,6 +80,11 @@ export default async function DraftsBoard({ searchParams }: PageProps<"/">) {
                 {t.name}
               </Link>
             ))}
+            {hasNoTopic && (
+              <Link href={href(status, "none")} className={`chip ${topicId === "none" ? "chip-selected" : ""}`}>
+                No topic
+              </Link>
+            )}
           </FilterRow>
         )}
         <FilterRow label="Show in">

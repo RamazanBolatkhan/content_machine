@@ -4,6 +4,9 @@ import path from "node:path";
 import { MEDIA_DIR } from "@/db";
 import type { MediaItem } from "@/db/schema";
 
+// Bigger files are not downloaded (the draft keeps the link to the original)
+const MAX_BYTES = 150 * 1024 * 1024;
+
 const EXT: Record<string, string> = {
   "image/jpeg": "jpg",
   "image/png": "png",
@@ -26,6 +29,10 @@ export async function downloadMedia(sourceId: string, items: Omit<MediaItem, "fi
           signal: AbortSignal.timeout(60_000),
         });
         if (!res.ok) throw new Error(String(res.status));
+        if (Number(res.headers.get("content-length") ?? 0) > MAX_BYTES) {
+          await res.body?.cancel();
+          throw new Error("file too large");
+        }
         const type = res.headers.get("content-type")?.split(";")[0] ?? "";
         const ext = EXT[type] ?? (item.type === "photo" ? "jpg" : "mp4");
         // A web page instead of a file (blocked hotlink, login wall…)

@@ -22,7 +22,8 @@ export function latestTexts(versions: Pick<DraftVersion, "id" | "lang" | "text">
   return out;
 }
 
-export function listDrafts(filter: { status?: DraftStatus; topicId?: number }): DraftWithTexts[] {
+/** topicId: a topic id, "none" for drafts without a topic, or undefined for all. */
+export function listDrafts(filter: { status?: DraftStatus; topicId?: number | "none" }): DraftWithTexts[] {
   const topics = new Map(getTopics().map((t) => [t.id, t.name]));
   const byDraft = new Map<number, Pick<DraftVersion, "id" | "lang" | "text">[]>();
   for (const v of db
@@ -37,7 +38,8 @@ export function listDrafts(filter: { status?: DraftStatus; topicId?: number }): 
     .from(schema.drafts)
     .orderBy(desc(schema.drafts.score), desc(schema.drafts.id))
     .all()
-    .filter((d) => (!filter.status || d.status === filter.status) && (!filter.topicId || d.topicId === filter.topicId))
+    .filter((d) => !filter.status || d.status === filter.status)
+    .filter((d) => (filter.topicId === "none" ? d.topicId == null : !filter.topicId || d.topicId === filter.topicId))
     .map((d) => ({
       ...d,
       texts: latestTexts(byDraft.get(d.id) ?? []),
