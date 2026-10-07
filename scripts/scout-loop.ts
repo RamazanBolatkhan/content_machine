@@ -1,5 +1,5 @@
 /**
- * Imports X bookmarks and finds news for all enabled games every N minutes,
+ * Imports X bookmarks and finds news for all enabled topics every N minutes,
  * while the terminal stays open.
  * Usage: npm run scout:loop -- 240
  */

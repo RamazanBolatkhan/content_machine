@@ -1,8 +1,9 @@
 import { connection } from "next/server";
-import { deleteGame, disconnectXAction, saveGame, saveSettings } from "@/app/actions";
-import type { Game } from "@/db/schema";
+import { deleteTopic, disconnectXAction, saveSettings, saveTopic } from "@/app/actions";
+import type { Topic } from "@/db/schema";
 import { AI_PROVIDER, aiConfigured, aiSetupHint, DEFAULT_STYLE } from "@/lib/ai";
-import { getGames, getSettings, recentRuns } from "@/lib/queries";
+import { LANGUAGES } from "@/lib/languages";
+import { getSettings, getTopics, recentRuns } from "@/lib/queries";
 import { redirectUri, xAccount, xLoginConfigured } from "@/lib/x/auth";
 import { xConfigured } from "@/lib/x/client";
 
@@ -10,20 +11,20 @@ import { xConfigured } from "@/lib/x/client";
 export const instant = false;
 
 const FEED_EXAMPLES = [
-  "https://www.reddit.com/r/GTA6/top/.rss?t=day",
-  "https://store.steampowered.com/feeds/news/app/APP_ID",
+  "https://openai.com/news/rss.xml",
+  "https://www.reddit.com/r/OpenAI/top/.rss?t=day",
   "https://www.youtube.com/feeds/videos.xml?channel_id=CHANNEL_ID",
 ].join("\n");
 
-function GameForm({ game }: { game?: Game }) {
+function TopicForm({ topic }: { topic?: Topic }) {
   return (
-    <form action={saveGame} className="card grid gap-3 p-4 md:grid-cols-[1fr_1.2fr_1.6fr_auto]">
-      {game && <input type="hidden" name="id" value={game.id} />}
+    <form action={saveTopic} className="card grid gap-3 p-4 md:grid-cols-[1fr_1.2fr_1.6fr_auto]">
+      {topic && <input type="hidden" name="id" value={topic.id} />}
       <div>
-        <label className="label">Game</label>
-        <input name="name" className="input" defaultValue={game?.name} placeholder="GTA 6" required />
+        <label className="label">Topic</label>
+        <input name="name" className="input" defaultValue={topic?.name} placeholder="OpenAI" required />
         <label className="mt-2 flex items-center gap-2 text-sm">
-          <input type="checkbox" name="enabled" defaultChecked={game?.enabled ?? true} /> Enabled
+          <input type="checkbox" name="enabled" defaultChecked={topic?.enabled ?? true} /> Enabled
         </label>
       </div>
       <div>
@@ -31,20 +32,20 @@ function GameForm({ game }: { game?: Game }) {
         <textarea
           name="keywords"
           className="input min-h-28 font-mono text-xs"
-          defaultValue={game?.keywords}
-          placeholder={"GTA 6\nGTA VI\nGrand Theft Auto VI"}
+          defaultValue={topic?.keywords}
+          placeholder={"OpenAI\nChatGPT\nSam Altman"}
           required
         />
       </div>
       <div>
-        <label className="label">Feeds only about this game (RSS / Atom)</label>
-        <textarea name="feeds" className="input min-h-28 font-mono text-xs" defaultValue={game?.feeds} placeholder={FEED_EXAMPLES} />
-        <input type="hidden" name="trustedAccounts" value={game?.trustedAccounts ?? ""} />
+        <label className="label">Feeds only about this topic (RSS / Atom)</label>
+        <textarea name="feeds" className="input min-h-28 font-mono text-xs" defaultValue={topic?.feeds} placeholder={FEED_EXAMPLES} />
+        <input type="hidden" name="trustedAccounts" value={topic?.trustedAccounts ?? ""} />
       </div>
       <div className="flex flex-col justify-end gap-2">
-        <button className="btn btn-primary">{game ? "Save" : "Add game"}</button>
-        {game && (
-          <button formAction={deleteGame} className="btn btn-bad">
+        <button className="btn btn-primary">{topic ? "Save" : "Add topic"}</button>
+        {topic && (
+          <button formAction={deleteTopic} className="btn btn-bad">
             Delete
           </button>
         )}
@@ -68,7 +69,7 @@ function Check({ name, label, hint, checked }: { name: string; label: string; hi
 export default async function SettingsPage({ searchParams }: PageProps<"/settings">) {
   await connection();
   const sp = await searchParams;
-  const games = getGames();
+  const topics = getTopics();
   const s = getSettings();
   const runs = recentRuns();
   const account = xAccount();
@@ -112,11 +113,14 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-xl font-semibold">Games to track</h2>
-        {games.map((g) => (
-          <GameForm key={g.id} game={g} />
+        <h2 className="text-xl font-semibold">Topics to track</h2>
+        <p className="text-sm text-zinc-500">
+          A company, product or theme you post about, e.g. “OpenAI”, “Anthropic &amp; Claude”, “Open-source models”, “AI agents”.
+        </p>
+        {topics.map((t) => (
+          <TopicForm key={t.id} topic={t} />
         ))}
-        <GameForm />
+        <TopicForm />
       </section>
 
       <form action={saveSettings} className="space-y-10">
@@ -124,12 +128,12 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
           <h2 className="text-xl font-semibold">Sources</h2>
           <div className="card grid gap-4 p-4 md:grid-cols-3">
             <div className="space-y-3">
-              <Check name="rssEnabled" checked={s.rssEnabled} label="📰 RSS feeds" hint="Free. Game feeds + general news feeds below." />
+              <Check name="rssEnabled" checked={s.rssEnabled} label="📰 RSS feeds" hint="Free. Topic feeds + general news feeds below." />
               <Check
                 name="webSearchEnabled"
                 checked={s.webSearchEnabled}
                 label="🌐 Claude web search"
-                hint="Uses your Claude subscription. ~30 s per game."
+                hint="Uses your Claude subscription. ~30 s per topic."
               />
               <Check
                 name="xSearchEnabled"
@@ -149,18 +153,38 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
                 <input name="maxAgeHours" type="number" className="input" defaultValue={s.maxAgeHours} />
               </div>
               <div>
-                <label className="label">Max news items per game sent to AI</label>
-                <input name="candidatesPerGame" type="number" className="input" defaultValue={s.candidatesPerGame} />
+                <label className="label">Max news items per topic sent to AI</label>
+                <input name="candidatesPerTopic" type="number" className="input" defaultValue={s.candidatesPerTopic} />
               </div>
             </div>
             <div>
-              <label className="label">General news feeds (matched to games by keywords)</label>
+              <label className="label">General AI news feeds (matched to topics by keywords)</label>
               <textarea
                 name="newsFeeds"
                 className="input min-h-40 font-mono text-xs"
                 defaultValue={s.newsFeeds}
-                placeholder={"https://www.gematsu.com/feed\nhttps://www.eurogamer.net/feed\nhttps://www.pcgamer.com/rss/"}
+                placeholder={"https://techcrunch.com/category/artificial-intelligence/feed/\nhttps://www.theverge.com/rss/ai-artificial-intelligence/index.xml\nhttps://hnrss.org/newest?q=AI+OR+LLM&points=100"}
               />
+            </div>
+          </div>
+        </section>
+
+        <section className="space-y-3">
+          <h2 className="text-xl font-semibold">Languages</h2>
+          <div className="card space-y-3 p-4">
+            <p className="text-sm text-zinc-500">Every post is written in each checked language. Unchecking all = all languages.</p>
+            <div className="flex flex-wrap gap-x-6 gap-y-2">
+              {LANGUAGES.map((l) => (
+                <label key={l.code} className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" name={`lang_${l.code}`} defaultChecked={s.languages.includes(l.code)} />
+                  {l.flag} {l.name} <span className="text-zinc-500">({l.native})</span>
+                </label>
+              ))}
+            </div>
+            <div className="max-w-xs">
+              <label className="label">Max characters per post</label>
+              <input name="charLimit" type="number" className="input" defaultValue={s.charLimit} />
+              <p className="mt-1 text-xs text-zinc-500">500 = Threads. X allows 280 (free) or more with Premium.</p>
             </div>
           </div>
         </section>
@@ -169,16 +193,16 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
           <h2 className="text-xl font-semibold">Writing & filters</h2>
           <div className="card grid gap-4 p-4 md:grid-cols-3">
             <div>
-              <label className="label">Style for Russian posts</label>
+              <label className="label">Style (in any language, applies to all)</label>
               <textarea name="stylePrompt" className="input min-h-36 text-xs" defaultValue={s.stylePrompt} placeholder={DEFAULT_STYLE} />
             </div>
             <div>
               <label className="label">Glossary (never translate)</label>
-              <textarea name="glossary" className="input min-h-36 font-mono text-xs" defaultValue={s.glossary} placeholder={"Rockstar Games\nPS5\nearly access"} />
+              <textarea name="glossary" className="input min-h-36 font-mono text-xs" defaultValue={s.glossary} placeholder={"open-source\nfine-tuning\nAGI"} />
             </div>
             <div>
               <label className="label">Blocklist (words or @handles)</label>
-              <textarea name="blocklist" className="input min-h-36 font-mono text-xs" defaultValue={s.blocklist} placeholder={"giveaway\n@spamaccount"} />
+              <textarea name="blocklist" className="input min-h-36 font-mono text-xs" defaultValue={s.blocklist} placeholder={"crypto\ngiveaway\n@spamaccount"} />
             </div>
           </div>
         </section>
@@ -195,8 +219,8 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
               <input name="minViews" type="number" className="input" defaultValue={s.minViews} />
             </div>
             <div>
-              <label className="label">Posts read per game (10–100)</label>
-              <input name="fetchPerGame" type="number" className="input" defaultValue={s.fetchPerGame} />
+              <label className="label">Posts read per topic (10–100)</label>
+              <input name="fetchPerTopic" type="number" className="input" defaultValue={s.fetchPerTopic} />
             </div>
             <div>
               <label className="label">Post language (en, ja… empty = any)</label>
@@ -233,7 +257,7 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
               {runs.map((r) => (
                 <tr key={r.id}>
                   <td className="p-3 whitespace-nowrap">{r.startedAt.toLocaleString()}</td>
-                  <td className="p-3">{r.kind === "bookmarks" ? "🔖 Bookmarks" : `📰 ${r.gameName}`}</td>
+                  <td className="p-3">{r.kind === "bookmarks" ? "🔖 Bookmarks" : `📰 ${r.topicName}`}</td>
                   <td className="p-3">{r.itemsRead}</td>
                   <td className="p-3">{r.candidates}</td>
                   <td className="p-3">{r.saved}</td>

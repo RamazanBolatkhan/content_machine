@@ -5,7 +5,8 @@ import { DraftEditor } from "@/components/DraftEditor";
 import { MediaGrid } from "@/components/MediaGrid";
 import { SourceBadge } from "@/components/SourceBadge";
 import { StatusButtons } from "@/components/StatusButtons";
-import { getDraft } from "@/lib/queries";
+import { enabledLangs } from "@/lib/languages";
+import { getDraft, getSettings } from "@/lib/queries";
 import { formatCount, timeAgo } from "@/lib/util";
 
 // Reads the local database on every request
@@ -16,7 +17,8 @@ export default async function DraftPage({ params }: PageProps<"/drafts/[id]">) {
   const { id } = await params;
   const found = getDraft(Number(id));
   if (!found) notFound();
-  const { draft, versions, gameName } = found;
+  const { draft, versions, topicName } = found;
+  const settings = getSettings();
   const m = draft.metrics;
   const isX = draft.source === "x_bookmark" || draft.source === "x_search";
 
@@ -35,7 +37,7 @@ export default async function DraftPage({ params }: PageProps<"/drafts/[id]">) {
       <div className="grid gap-4 lg:grid-cols-2">
         <section className="card space-y-3 p-4">
           <div className="flex items-center justify-between">
-            <span className="label">Original {gameName && `· ${gameName}`}</span>
+            <span className="label">Original {topicName && `· ${topicName}`}</span>
             <a href={draft.sourceUrl} target="_blank" rel="noreferrer" className="text-xs text-sky-600 hover:underline">
               Open source ↗
             </a>
@@ -57,7 +59,7 @@ export default async function DraftPage({ params }: PageProps<"/drafts/[id]">) {
           </div>
           {draft.aiReason && <p className="text-sm text-zinc-500 italic">🤖 {draft.aiReason}</p>}
           <p className="text-xs text-zinc-500">
-            Tip: credit the source when posting (e.g. “Источник: {isX ? `@${draft.authorHandle}` : draft.sourceName}”).
+            Tip: credit the source when posting (e.g. “Source: {isX ? `@${draft.authorHandle}` : draft.sourceName}”).
           </p>
         </section>
 
@@ -66,6 +68,8 @@ export default async function DraftPage({ params }: PageProps<"/drafts/[id]">) {
             key={versions[0]?.id}
             draftId={draft.id}
             versions={versions}
+            langs={enabledLangs(settings)}
+            charLimit={settings.charLimit}
             hasMedia={draft.media.some((x) => x.file)}
           />
         </section>

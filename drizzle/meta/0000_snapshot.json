@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "309ae4d5-2292-490c-b1b8-1e6cc998dfcb",
+  "id": "06ec5d10-3794-4f6f-bfd4-65fe62a7fcb0",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "draft_versions": {
@@ -21,8 +21,15 @@
           "notNull": true,
           "autoincrement": false
         },
-        "text_ru": {
-          "name": "text_ru",
+        "lang": {
+          "name": "lang",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "text": {
+          "name": "text",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
@@ -118,8 +125,8 @@
           "autoincrement": false,
           "default": "''"
         },
-        "game_id": {
-          "name": "game_id",
+        "topic_id": {
+          "name": "topic_id",
           "type": "integer",
           "primaryKey": false,
           "notNull": false,
@@ -205,12 +212,12 @@
         }
       },
       "foreignKeys": {
-        "drafts_game_id_games_id_fk": {
-          "name": "drafts_game_id_games_id_fk",
+        "drafts_topic_id_topics_id_fk": {
+          "name": "drafts_topic_id_topics_id_fk",
           "tableFrom": "drafts",
-          "tableTo": "games",
+          "tableTo": "topics",
           "columnsFrom": [
-            "game_id"
+            "topic_id"
           ],
           "columnsTo": [
             "id"
@@ -219,70 +226,6 @@
           "onUpdate": "no action"
         }
       },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "games": {
-      "name": "games",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "integer",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": true
-        },
-        "name": {
-          "name": "name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "keywords": {
-          "name": "keywords",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "''"
-        },
-        "feeds": {
-          "name": "feeds",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "''"
-        },
-        "trusted_accounts": {
-          "name": "trusted_accounts",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "''"
-        },
-        "enabled": {
-          "name": "enabled",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(unixepoch())"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}
@@ -304,8 +247,8 @@
           "notNull": true,
           "autoincrement": false
         },
-        "game_id": {
-          "name": "game_id",
+        "topic_id": {
+          "name": "topic_id",
           "type": "integer",
           "primaryKey": false,
           "notNull": false,
@@ -367,12 +310,12 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "scout_runs_game_id_games_id_fk": {
-          "name": "scout_runs_game_id_games_id_fk",
+        "scout_runs_topic_id_topics_id_fk": {
+          "name": "scout_runs_topic_id_topics_id_fk",
           "tableFrom": "scout_runs",
-          "tableTo": "games",
+          "tableTo": "topics",
           "columnsFrom": [
-            "game_id"
+            "topic_id"
           ],
           "columnsTo": [
             "id"
@@ -468,8 +411,8 @@
           "autoincrement": false,
           "default": 48
         },
-        "candidates_per_game": {
-          "name": "candidates_per_game",
+        "candidates_per_topic": {
+          "name": "candidates_per_topic",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
@@ -492,8 +435,8 @@
           "autoincrement": false,
           "default": 0
         },
-        "fetch_per_game": {
-          "name": "fetch_per_game",
+        "fetch_per_topic": {
+          "name": "fetch_per_topic",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
@@ -507,6 +450,22 @@
           "notNull": true,
           "autoincrement": false,
           "default": "'en'"
+        },
+        "languages": {
+          "name": "languages",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'[\"zh\",\"ko\",\"ja\",\"ru\",\"es\",\"pt\"]'"
+        },
+        "char_limit": {
+          "name": "char_limit",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 500
         },
         "blocklist": {
           "name": "blocklist",
@@ -531,6 +490,70 @@
           "notNull": true,
           "autoincrement": false,
           "default": "''"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "topics": {
+      "name": "topics",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "keywords": {
+          "name": "keywords",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "''"
+        },
+        "feeds": {
+          "name": "feeds",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "''"
+        },
+        "trusted_accounts": {
+          "name": "trusted_accounts",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "''"
+        },
+        "enabled": {
+          "name": "enabled",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch())"
         }
       },
       "indexes": {},

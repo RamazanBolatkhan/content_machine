@@ -1,6 +1,6 @@
 # Content Machine — Project Scheme
 
-> Status: **v2 built (local web app): bookmarks + free news, AI on the Claude subscription.** Section 13 is the current design. Sections 1–12 are history.
+> Status: **v3 built: AI news in 6 languages** (bookmarks + free news, AI on the Claude subscription). Sections 13 (sources, AI, pipeline) + 14 (AI-news + multilingual changes) are the current design. Sections 1–12 are history.
 > Last updated: 2026-10-06
 
 ## 1. The idea in one paragraph
@@ -292,3 +292,16 @@ Each AI or hand edit creates a new version, so changes can be undone.
 **Code map changes vs. v1:** `src/lib/claude-cli.ts` (CLI runner), `src/lib/ai.ts` (`aiObject`/`aiText`, provider switch), `src/lib/x/auth.ts` + `src/app/api/x/{login,callback}` (OAuth), `src/lib/x/bookmarks.ts`, `src/lib/sources/{rss,web-search,types}.ts`, `src/components/CollectButtons.tsx`, `SourceBadge.tsx`. Drafts are source-agnostic (`sourceId` = `x:<id>` or `url:<normalized url>`, `source`, `sourceName`, nullable `metrics`, `score` = AI importance).
 
 **Verified 2026-10-07:** RSS (Reddit, Gematsu, Steam), Claude web search → 2 Russian drafts with images in 33 s, AI edit via the editor (4 s, saved as a version), bookmark AI path with a sample post (game detected). **Not verified yet:** the real X OAuth login and bookmarks API call (owner has no X app credentials yet).
+
+## 14. v3: AI news, six languages (2026-10-07), current
+
+**Why:** the owner switched from gaming news in Russian to **AI news** for a **multilingual audience**.
+
+**Changes vs. v2:**
+- **Games → topics** (`topics` table, `topicId` on drafts/runs). Topics are companies, products or themes (OpenAI, open-source models, AI agents…). Prompts, web search and examples target AI news.
+- **Languages:** `src/lib/languages.ts` lists zh (Simplified), ko, ja, ru, es (neutral), pt (Brazilian). Settings stores enabled `languages` (default: all) and `charLimit` (default 500 = Threads).
+- **Pipeline split:** the scout's **judge** call now only decides keep/topic/importance (1–10)/storyKey/reason (in English). A separate **writer** (`src/lib/agents/writer.ts`) writes the post in every enabled language, 3 items per AI call, with a zod schema built from the enabled languages. Items whose writing fails are not marked seen, so they are retried.
+- **Versions per language:** `draft_versions` has `lang` + `text`. The editor has language tabs, keeps unsaved edits per tab, does AI edits per language (the instruction can be in any language, the output stays in the tab's language), and offers **Write missing languages** (`writeMissingLanguages`).
+- **Tested feeds** for AI news are listed in README (OpenAI, DeepMind, Google AI, Hugging Face, r/LocalLLaMA, TechCrunch AI, The Verge AI, MIT Tech Review, hnrss). Anthropic has no RSS; web search covers it.
+
+**Verified 2026-10-07:** topic "OpenAI" with the OpenAI RSS feed, TechCrunch AI and web search → 3 drafts in 70 s, each in all 6 languages within 500 chars, with sensible importance scores. Japanese AI edit with an English instruction stayed in Japanese (4 s). Write-missing-languages refilled a deleted Korean version. All pages render. **Still not verified:** the real X OAuth login and bookmarks call.

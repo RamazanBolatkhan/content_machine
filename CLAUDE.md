@@ -1,8 +1,8 @@
 # Content Machine
 
-Local web app: collects the owner's **X bookmarks** (X API, OAuth, ~$0.001/post) and **free gaming news** (RSS feeds + Claude web search). Claude (via the local Claude Code CLI on the owner's **subscription**, no API cost) filters and translates everything to **Russian**. The owner reviews/edits drafts (by hand or by asking the AI) and **posts to Threads manually** (no auto-publishing, by owner's choice).
+Local web app for an **AI news** account: collects the owner's **X bookmarks** (X API, OAuth, ~$0.001/post) and **free AI news** (RSS feeds + Claude web search) per **topic** (e.g. OpenAI, open-source models). Claude (via the local Claude Code CLI on the owner's **subscription**, no API cost) judges items and writes each post in **six languages: zh, ko, ja, ru, es, pt** (`src/lib/languages.ts`). The owner reviews/edits drafts per language (by hand or by asking the AI) and **posts manually** (no auto-publishing, by owner's choice). The repo is public: README.md is the user guide.
 
-**Read [docs/PROJECT_SCHEME.md](docs/PROJECT_SCHEME.md) first**, especially section 13 (current design, decisions, code map). Setup steps: [README.md](README.md).
+**Read [docs/PROJECT_SCHEME.md](docs/PROJECT_SCHEME.md) first**, especially sections 13–14 (current design, decisions, code map). Setup steps: [README.md](README.md).
 
 Stack: Next.js 16 (App Router) + Tailwind, SQLite via Drizzle (`data/app.db`), AI via `claude -p` (`src/lib/claude-cli.ts`) or optionally AI SDK 7 + Vercel AI Gateway (`AI_PROVIDER=gateway`).
 

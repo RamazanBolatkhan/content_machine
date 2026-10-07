@@ -1,12 +1,14 @@
 import { z } from "zod";
 import { desc, eq, gte, inArray } from "drizzle-orm";
 import { db, schema } from "@/db";
-import type { Game, MediaItem, PostMetrics, Settings, SourceType } from "@/db/schema";
-import { aiObject, translationRules } from "@/lib/ai";
+import type { Topic, MediaItem, PostMetrics, Settings, SourceType } from "@/db/schema";
+import { aiObject } from "@/lib/ai";
+import { enabledLangs } from "@/lib/languages";
+import { writePosts } from "./writer";
 import { downloadMedia } from "@/lib/media";
 import { fetchFeed, fetchOgImage } from "@/lib/sources/rss";
 import type { NewsItem } from "@/lib/sources/types";
-import { searchGameNews } from "@/lib/sources/web-search";
+import { searchTopicNews } from "@/lib/sources/web-search";
 import { getSettings } from "@/lib/queries";
 import { lines } from "@/lib/util";
 import { fetchNewBookmarks } from "@/lib/x/bookmarks";
@@ -32,12 +34,12 @@ type Candidate = {
   postedAt: Date | null;
   metrics: PostMetrics | null;
   media: Omit<MediaItem, "file">[];
-  gameId: number | null;
+  topicId: number | null;
 };
 
 // ---------- converting sources ----------
 
-function fromXPost(post: XPost, source: SourceType, gameId: number | null): Candidate {
+function fromXPost(post: XPost, source: SourceType, topicId: number | null): Candidate {
   return {
     sourceId: `x:${post.id}`,
     source,
@@ -48,7 +50,7 @@ function fromXPost(post: XPost, source: SourceType, gameId: number | null): Cand
     postedAt: post.createdAt,
     metrics: post.metrics,
     media: post.media,
-    gameId,
+    topicId,
   };
 }
 
@@ -67,7 +69,7 @@ export function normalizeUrl(raw: string): string {
   }
 }
 
-function fromNews(item: NewsItem, source: SourceType, gameId: number): Candidate {
+function fromNews(item: NewsItem, source: SourceType, topicId: number): Candidate {
   return {
     sourceId: `url:${normalizeUrl(item.url)}`,
     source,
@@ -78,7 +80,7 @@ function fromNews(item: NewsItem, source: SourceType, gameId: number): Candidate
     postedAt: item.publishedAt,
     metrics: null,
     media: item.imageUrl ? [{ type: "photo", remoteUrl: item.imageUrl }] : [],
-    gameId,
+    topicId,
   };
 }
 
@@ -109,16 +111,16 @@ function isBlocked(c: Candidate, blocklist: string[]): boolean {
   });
 }
 
-function matchesGame(item: NewsItem, game: Game): boolean {
+function matchesTopic(item: NewsItem, topic: Topic): boolean {
   const text = `${item.title} ${item.summary}`.toLowerCase();
-  return lines(game.keywords).some((k) => text.includes(k.toLowerCase().replace(/^"|"$/g, "")));
+  return lines(topic.keywords).some((k) => text.includes(k.toLowerCase().replace(/^"|"$/g, "")));
 }
 
 // ---------- paid X search (off by default) ----------
 
-export function buildQuery(game: Game, settings: Settings): string {
-  const terms = lines(game.keywords).map((k) => (/\s/.test(k) && !k.startsWith('"') ? `"${k}"` : k));
-  if (!terms.length) throw new Error(`Game "${game.name}" has no keywords`);
+export function buildQuery(topic: Topic, settings: Settings): string {
+  const terms = lines(topic.keywords).map((k) => (/\s/.test(k) && !k.startsWith('"') ? `"${k}"` : k));
+  if (!terms.length) throw new Error(`Topic "${topic.name}" has no keywords`);
   const parts = [`(${terms.join(" OR ")})`, "-is:retweet", "-is:reply"];
   if (settings.searchLang) parts.push(`lang:${settings.searchLang}`);
   return parts.join(" ");
@@ -134,13 +136,13 @@ export function scorePost(post: XPost, trusted: Set<string>): number {
   return Math.round((engagement / Math.pow(ageHours + 2, 1.2)) * bonus * 10) / 10;
 }
 
-async function xSearchCandidates(game: Game, settings: Settings): Promise<Candidate[]> {
+async function xSearchCandidates(topic: Topic, settings: Settings): Promise<Candidate[]> {
   const posts = await searchRecentPosts({
-    query: buildQuery(game, settings),
-    maxResults: settings.fetchPerGame,
+    query: buildQuery(topic, settings),
+    maxResults: settings.fetchPerTopic,
     sinceHours: settings.maxAgeHours,
   });
-  const trusted = new Set(lines(game.trustedAccounts).map((h) => h.replace(/^@/, "").toLowerCase()));
+  const trusted = new Set(lines(topic.trustedAccounts).map((h) => h.replace(/^@/, "").toLowerCase()));
   return posts
     .filter((p) => !p.isReply)
     .filter((p) => p.metrics.likes >= settings.minLikes || trusted.has(p.authorHandle.toLowerCase()))
@@ -148,7 +150,7 @@ async function xSearchCandidates(game: Game, settings: Settings): Promise<Candid
     .map((p) => ({ post: p, score: scorePost(p, trusted) }))
     .sort((a, b) => b.score - a.score)
     .slice(0, 5)
-    .map(({ post }) => fromXPost(post, "x_search", game.id));
+    .map(({ post }) => fromXPost(post, "x_search", topic.id));
 }
 
 // ---------- AI: judge + translate ----------
@@ -157,14 +159,13 @@ const judgementSchema = z.object({
   items: z.array(
     z.object({
       id: z.string().describe("The item id, exactly as given (c1, c2…)"),
-      keep: z.boolean().describe("true if worth publishing as a Russian Threads post"),
-      gameId: z.number().int().nullable().describe("Id of the game from the list this item is about, or null"),
+      keep: z.boolean().describe("true if worth publishing as a post"),
+      topicId: z.number().int().nullable().describe("Id of the topic from the list this item is about, or null"),
       importance: z.number().int().min(1).max(10).describe("How interesting for the audience, 1–10"),
-      reason: z.string().describe("One short sentence in Russian: why it is (or isn't) worth posting"),
+      reason: z.string().describe("One short sentence in English: why it is (or isn't) worth posting"),
       storyKey: z
         .string()
-        .describe("Short kebab-case id of the news story, e.g. gta6-trailer-3. Reuse an existing key for the same story."),
-      textRu: z.string().describe("Ready-to-post Russian text if keep is true, otherwise empty string"),
+        .describe("Short kebab-case id of the news story, e.g. openai-gpt6-launch. Reuse an existing key for the same story."),
     }),
   ),
 });
@@ -183,10 +184,10 @@ function recentStories() {
 }
 
 /**
- * curated = the owner picked these (bookmarks): always keep, AI finds the game and translates.
+ * curated = the owner picked these (bookmarks): always keep, AI only finds the topic.
  * otherwise the AI decides what is worth posting.
  */
-async function judge(candidates: Candidate[], opts: { curated: boolean; games: Game[]; settings: Settings }) {
+async function judge(candidates: Candidate[], opts: { curated: boolean; topics: Topic[]; settings: Settings }) {
   const recent = recentStories();
   const results: { candidate: Candidate; j: Judgement }[] = [];
 
@@ -196,21 +197,19 @@ async function judge(candidates: Candidate[], opts: { curated: boolean; games: G
 
     const { items } = await aiObject(judgementSchema, {
       instructions: [
-        "You are the editor of a Russian-language gaming news account on Threads.",
+        "You are the editor of a multilingual AI news account on social media.",
+        "Pick the matching topic id for each item (or null if none fits) and rate how interesting it is for people following AI.",
         opts.curated
-          ? "The owner hand-picked these X posts (bookmarks). Set keep=true for all of them, pick the matching game id (or null if none fits) and write the Russian post."
+          ? "The owner hand-picked these X posts (bookmarks). Set keep=true for all of them."
           : [
-              "Decide for each item if it is worth publishing in Russian: real news, announcements, trailers, credible leaks, notable updates, or genuinely interesting content about the game.",
-              "Reject: spam, giveaways, ads, guides/listicles, low-effort memes, drama, items not about the game, old news.",
+              "Decide for each item if it is worth posting: model and product launches, major updates, research breakthroughs, funding and acquisitions, policy and regulation, notable open-source releases, credible leaks, or genuinely useful/surprising AI content.",
+              "Reject: spam, ads, giveaways, SEO listicles, generic opinion pieces, 'top 10 prompts' guides, minor drama, items not about AI, old news.",
               "If an item covers a story in the 'already have' list, reuse that storyKey and set keep=false.",
               "If several items cover the same new story, give them the same storyKey; the app keeps the best.",
             ].join("\n"),
-        "For news articles, write a short post with the key facts, not a copy of the article.",
-        "",
-        translationRules(opts.settings),
       ].join("\n"),
       prompt: [
-        `Games (id: name): ${opts.games.map((g) => `${g.id}: ${g.name}`).join("; ") || "none"}`,
+        `Topics (id: name): ${opts.topics.map((g) => `${g.id}: ${g.name}`).join("; ") || "none"}`,
         "",
         recent.length
           ? `Already have (storyKey: text):\n${recent.map((r) => `- ${r.storyKey}: ${r.text.slice(0, 140).replace(/\s+/g, " ")}`).join("\n")}`
@@ -221,7 +220,7 @@ async function judge(candidates: Candidate[], opts: { curated: boolean; games: G
           [...ids].map(([id, c]) => ({
             id,
             source: c.source === "x_bookmark" || c.source === "x_search" ? `X post by @${c.authorHandle}` : c.sourceName,
-            gameId: c.gameId,
+            topicId: c.topicId,
             date: c.postedAt?.toISOString().slice(0, 10) ?? null,
             likes: c.metrics?.likes,
             hasMedia: c.media.map((m) => m.type),
@@ -245,9 +244,9 @@ async function judge(candidates: Candidate[], opts: { curated: boolean; games: G
 
 async function saveDrafts(
   judged: { candidate: Candidate; j: Judgement }[],
-  opts: { curated: boolean; games: Game[] },
+  opts: { curated: boolean; topics: Topic[]; settings: Settings },
 ): Promise<number> {
-  const gameIds = new Set(opts.games.map((g) => g.id));
+  const topicIds = new Set(opts.topics.map((g) => g.id));
   const existingStories = new Set(recentStories().map((r) => r.storyKey));
 
   // Pick what to save: everything (curated) or the best item per new story
@@ -255,21 +254,39 @@ async function saveDrafts(
   for (const item of judged) {
     const { j } = item;
     const keep = opts.curated || (j.keep && !existingStories.has(j.storyKey));
-    if (!keep || !j.textRu.trim()) continue;
+    if (!keep) continue;
     const key = opts.curated ? item.candidate.sourceId : j.storyKey;
     const current = chosen.get(key);
     if (!current || j.importance > current.j.importance) chosen.set(key, item);
   }
 
+  // Write the post in every enabled language
+  const langs = enabledLangs(opts.settings);
+  const posts = await writePosts(
+    [...chosen.values()].map(({ candidate: c }) => ({
+      id: c.sourceId,
+      source: c.source === "x_bookmark" || c.source === "x_search" ? `X post by @${c.authorHandle}` : c.sourceName,
+      text: c.text,
+    })),
+    langs,
+    opts.settings,
+  );
+
   let saved = 0;
+  const unwritten = new Set<string>();
   for (const { candidate: c, j } of chosen.values()) {
+    const texts = Object.entries(posts.get(c.sourceId) ?? {});
+    if (!texts.length) {
+      unwritten.add(c.sourceId); // not marked seen below, so it is retried next run
+      continue;
+    }
     let media = c.media;
     if (!media.length && (c.source === "rss" || c.source === "web")) {
       const image = await fetchOgImage(c.url);
       if (image) media = [{ type: "photo", remoteUrl: image }];
     }
     const files = await downloadMedia(c.sourceId, media);
-    const gameId = c.gameId ?? (j.gameId != null && gameIds.has(j.gameId) ? j.gameId : null);
+    const topicId = c.topicId ?? (j.topicId != null && topicIds.has(j.topicId) ? j.topicId : null);
 
     const ok = db.transaction((tx) => {
       const draft = tx
@@ -280,7 +297,7 @@ async function saveDrafts(
           sourceUrl: c.url,
           sourceName: c.sourceName,
           authorHandle: c.authorHandle,
-          gameId,
+          topicId,
           originalText: c.text,
           postedAt: c.postedAt,
           metrics: c.metrics,
@@ -293,16 +310,19 @@ async function saveDrafts(
         .returning({ id: schema.drafts.id })
         .get();
       if (!draft) return false;
-      tx.insert(schema.draftVersions).values({ draftId: draft.id, textRu: j.textRu.trim(), source: "ai_scout" }).run();
+      tx.insert(schema.draftVersions)
+        .values(texts.map(([lang, text]) => ({ draftId: draft.id, lang, text, source: "ai_scout" as const })))
+        .run();
       return true;
     });
     if (ok) saved++;
   }
 
   // Remember every judged item so the AI never sees it twice
-  if (judged.length) {
+  const seen = judged.filter(({ candidate }) => !unwritten.has(candidate.sourceId));
+  if (seen.length) {
     db.insert(schema.seenItems)
-      .values(judged.map(({ candidate }) => ({ sourceId: candidate.sourceId })))
+      .values(seen.map(({ candidate }) => ({ sourceId: candidate.sourceId })))
       .onConflictDoNothing()
       .run();
   }
@@ -313,13 +333,13 @@ async function saveDrafts(
 
 async function logged(
   kind: "bookmarks" | "news",
-  gameId: number | null,
+  topicId: number | null,
   label: string,
   fn: (r: RunResult) => Promise<void>,
 ): Promise<RunResult> {
   const run = db
     .insert(schema.scoutRuns)
-    .values({ kind, gameId, startedAt: new Date() })
+    .values({ kind, topicId, startedAt: new Date() })
     .returning({ id: schema.scoutRuns.id })
     .get();
   const result: RunResult = { label, read: 0, candidates: 0, saved: 0, warnings: [] };
@@ -342,8 +362,8 @@ async function logged(
   return result;
 }
 
-function enabledGames(): Game[] {
-  return db.select().from(schema.games).where(eq(schema.games.enabled, true)).all();
+function enabledTopics(): Topic[] {
+  return db.select().from(schema.topics).where(eq(schema.topics.enabled, true)).all();
 }
 
 // ---------- public entry points ----------
@@ -352,29 +372,29 @@ function enabledGames(): Game[] {
 export async function syncBookmarks(): Promise<RunResult> {
   return logged("bookmarks", null, "X bookmarks", async (r) => {
     const settings = getSettings();
-    const games = enabledGames();
+    const topics = enabledTopics();
     const posts = await fetchNewBookmarks(settings.bookmarksPerSync, (id) => knownIds([`x:${id}`]).size > 0);
     r.read = posts.length;
     r.candidates = posts.length;
-    r.saved = await importCuratedPosts(posts, games, settings);
+    r.saved = await importCuratedPosts(posts, topics, settings);
   });
 }
 
-/** X posts the owner picked: every one becomes a draft (AI finds the game and translates). */
-export async function importCuratedPosts(posts: XPost[], games: Game[], settings: Settings): Promise<number> {
+/** X posts the owner picked: every one becomes a draft (AI finds the topic and translates). */
+export async function importCuratedPosts(posts: XPost[], topics: Topic[], settings: Settings): Promise<number> {
   if (!posts.length) return 0;
   const candidates = posts.map((p) => fromXPost(p, "x_bookmark", null));
-  const judged = await judge(candidates, { curated: true, games, settings });
-  return saveDrafts(judged, { curated: true, games });
+  const judged = await judge(candidates, { curated: true, topics, settings });
+  return saveDrafts(judged, { curated: true, topics, settings });
 }
 
-/** Find news for each enabled game (or one game) from RSS, Claude web search and, if enabled, paid X search. */
-export async function findNews(gameId?: number): Promise<RunResult[]> {
+/** Find news for each enabled topic (or one topic) from RSS, Claude web search and, if enabled, paid X search. */
+export async function findNews(topicId?: number): Promise<RunResult[]> {
   const settings = getSettings();
-  const games = enabledGames().filter((g) => !gameId || g.id === gameId);
-  const allGames = enabledGames();
+  const topics = enabledTopics().filter((g) => !topicId || g.id === topicId);
+  const allTopics = enabledTopics();
 
-  // Fetch each feed once per run, even if several games use it
+  // Fetch each feed once per run, even if several topics use it
   const feedCache = new Map<string, Promise<NewsItem[]>>();
   const getFeed = (url: string) => {
     if (!feedCache.has(url)) feedCache.set(url, fetchFeed(url));
@@ -382,20 +402,20 @@ export async function findNews(gameId?: number): Promise<RunResult[]> {
   };
 
   const results: RunResult[] = [];
-  for (const game of games) {
+  for (const topic of topics) {
     results.push(
-      await logged("news", game.id, game.name, async (r) => {
+      await logged("news", topic.id, topic.name, async (r) => {
         const candidates: Candidate[] = [];
 
         if (settings.rssEnabled) {
           const feeds = [
-            ...lines(game.feeds).map((url) => ({ url, gameOnly: true })),
-            ...lines(settings.newsFeeds).map((url) => ({ url, gameOnly: false })),
+            ...lines(topic.feeds).map((url) => ({ url, topicOnly: true })),
+            ...lines(settings.newsFeeds).map((url) => ({ url, topicOnly: false })),
           ];
           for (const feed of feeds) {
             try {
-              const items = (await getFeed(feed.url)).filter((i) => i.url && (feed.gameOnly || matchesGame(i, game)));
-              candidates.push(...items.map((i) => fromNews(i, "rss", game.id)));
+              const items = (await getFeed(feed.url)).filter((i) => i.url && (feed.topicOnly || matchesTopic(i, topic)));
+              candidates.push(...items.map((i) => fromNews(i, "rss", topic.id)));
             } catch (e) {
               r.warnings.push(`Feed ${feed.url}: ${e instanceof Error ? e.message : e}`);
             }
@@ -404,8 +424,8 @@ export async function findNews(gameId?: number): Promise<RunResult[]> {
 
         if (settings.webSearchEnabled) {
           try {
-            const items = await searchGameNews(game, settings.maxAgeHours, 8);
-            candidates.push(...items.map((i) => fromNews(i, "web", game.id)));
+            const items = await searchTopicNews(topic, settings.maxAgeHours, 8);
+            candidates.push(...items.map((i) => fromNews(i, "web", topic.id)));
           } catch (e) {
             r.warnings.push(`Web search: ${e instanceof Error ? e.message : e}`);
           }
@@ -415,7 +435,7 @@ export async function findNews(gameId?: number): Promise<RunResult[]> {
           r.warnings.push("Paid X search is on, but X_BEARER_TOKEN is not set");
         } else if (settings.xSearchEnabled) {
           try {
-            candidates.push(...(await xSearchCandidates(game, settings)));
+            candidates.push(...(await xSearchCandidates(topic, settings)));
           } catch (e) {
             r.warnings.push(`X search: ${e instanceof Error ? e.message : e}`);
           }
@@ -432,12 +452,12 @@ export async function findNews(gameId?: number): Promise<RunResult[]> {
           .filter((c) => !c.postedAt || c.postedAt.getTime() >= minDate)
           .filter((c) => !isBlocked(c, blocklist))
           .sort((a, b) => (b.postedAt?.getTime() ?? 0) - (a.postedAt?.getTime() ?? 0))
-          .slice(0, settings.candidatesPerGame);
+          .slice(0, settings.candidatesPerTopic);
         r.candidates = fresh.length;
         if (!fresh.length) return;
 
-        const judged = await judge(fresh, { curated: false, games: allGames, settings });
-        r.saved = await saveDrafts(judged, { curated: false, games: allGames });
+        const judged = await judge(fresh, { curated: false, topics: allTopics, settings });
+        r.saved = await saveDrafts(judged, { curated: false, topics: allTopics, settings });
       }),
     );
   }

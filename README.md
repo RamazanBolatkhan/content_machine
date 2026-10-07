@@ -1,15 +1,16 @@
 <div align="center">
 
-# 🎮 Content Machine
+# 🤖 Content Machine
 
-**Turn your X bookmarks and the latest gaming news into ready-to-post Russian Threads posts, with Claude doing the heavy lifting.**
+**Turn your X bookmarks and the latest AI news into ready-to-post social posts in six languages, with Claude doing the heavy lifting.**
 
-You pick what's worth sharing. Claude finds the news, writes the post in Russian and keeps everything tidy. You review, tweak, copy and post.
+You pick what's worth sharing. Claude finds the news and writes each post in 🇨🇳 Chinese, 🇰🇷 Korean, 🇯🇵 Japanese, 🇷🇺 Russian, 🇪🇸 Spanish and 🇧🇷 Portuguese. You review, tweak, copy and post.
 
 ![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)
 ![SQLite](https://img.shields.io/badge/SQLite-local-003B57?logo=sqlite&logoColor=white)
 ![Claude](https://img.shields.io/badge/AI-Claude-D97757)
+![Languages](https://img.shields.io/badge/languages-6-blueviolet)
 ![Runs locally](https://img.shields.io/badge/runs-locally-success)
 ![Cost](https://img.shields.io/badge/running%20cost-~%240-brightgreen)
 
@@ -21,15 +22,16 @@ You pick what's worth sharing. Claude finds the news, writes the post in Russian
 
 ## ✨ Features
 
-- **🔖 X bookmarks → drafts.** Scroll X like you always do and bookmark what you like. One click imports the new bookmarks, and Claude works out which game each post is about and writes the Russian version.
-- **📰 Free news discovery.** For every game you track, the app reads RSS feeds (gaming sites, subreddits, Steam news, YouTube channels) and runs a Claude web search. Claude keeps only real news, merges duplicates of the same story and skips what you already have.
-- **✍️ An editor that helps.** Edit by hand, or ask the AI: *“Сделай короче”*, *“make it sound like breaking news”*, *“add context for people who don't follow the game”*. Every change is saved as a version you can go back to.
-- **📋 Built for posting by hand.** Each draft has a 500-character counter (Threads' limit), **Copy text**, **Download media** (all images and videos as one zip) and **Mark posted**.
+- **🔖 X bookmarks → drafts.** Scroll X like you always do and bookmark the AI posts worth sharing. One click imports the new bookmarks, and Claude sorts each one into your topics and writes it in every language.
+- **📰 Free AI news discovery.** For every topic you track (OpenAI, Claude, open-source models, AI agents…), the app reads RSS feeds (company blogs, tech sites, Reddit, Hacker News) and runs a Claude web search. Claude keeps only real news, merges duplicates of the same story and skips what you already have.
+- **🌍 Six languages at once.** Every draft is written natively in 中文, 한국어, 日本語, Русский, Español and Português, adapted to how each audience talks about tech, not translated word for word. Turn languages on or off in Settings.
+- **✍️ An editor that helps.** Switch between language tabs, edit by hand, or ask the AI: *“make it shorter”*, *“explain the technical terms simply”*, *“mention it's free for students”*. You can ask in any language and the post stays in its own. Every change is saved as a version.
+- **📋 Built for posting by hand.** Each post has a character counter (500 by default, Threads' limit), **Copy text**, **Download media** (all images and videos as one zip) and **Mark posted**.
 - **🧠 AI on your Claude subscription.** By default the AI runs through Claude Code on your own computer, so there's no per-token API bill.
-- **🔒 Local and private.** Your drafts, settings and media stay in a SQLite file on your machine. Nothing is ever posted for you.
+- **🔒 Local and private.** Drafts, settings and media stay in a SQLite file on your machine. Nothing is ever posted for you.
 
 > [!NOTE]
-> Content Machine **never posts anything** on X or Threads. Publishing stays in your hands, which keeps your accounts safe from automation bans.
+> Content Machine **never posts anything** on X, Threads or anywhere else. Publishing stays in your hands, which keeps your accounts safe from automation bans.
 
 ---
 
@@ -39,27 +41,28 @@ You pick what's worth sharing. Claude finds the news, writes the post in Russian
 flowchart LR
     subgraph Sources
         B["🔖 Your X bookmarks<br/>(X API, read-only)"]
-        R["📰 RSS / Atom feeds<br/>(sites, Reddit, Steam, YouTube)"]
+        R["📰 RSS / Atom feeds<br/>(AI blogs, tech sites, Reddit, HN)"]
         W["🌐 Claude web search"]
     end
 
     B --> F["Filter<br/>new · fresh · not blocked"]
     R --> F
     W --> F
-    F --> AI["🧠 Claude<br/>judge · group stories · translate"]
-    AI --> D[("📋 Drafts board")]
-    D --> E["✏️ Editor<br/>hand edits + AI rewrites"]
+    F --> J["🧠 Claude: judge<br/>topic · importance · same story?"]
+    J --> L["🌍 Claude: write<br/>zh · ko · ja · ru · es · pt"]
+    L --> D[("📋 Drafts board")]
+    D --> E["✏️ Editor<br/>language tabs + AI rewrites"]
     E --> Y["📋 Copy text + ⬇️ media"]
-    Y --> T["📱 You post on Threads"]
+    Y --> T["📱 You post"]
 ```
 
 | Step | What happens |
 |---|---|
-| **1. Collect** | **Import bookmarks** pulls your newest X bookmarks and stops at the first one it already has. **Find news** reads your feeds and asks Claude to search the web for each game. |
+| **1. Collect** | **Import bookmarks** pulls your newest X bookmarks and stops at the first one it already has. **Find news** reads your feeds and asks Claude to search the web for each topic. |
 | **2. Filter** | Duplicates, items already seen, items older than your limit and anything on your blocklist are dropped. |
-| **3. Judge & translate** | Claude rates each item 1–10, groups items about the same story, and writes a short Russian post in your style. Bookmarks are always kept, because you chose them. |
-| **4. Review** | Drafts appear on the board with the original, the Russian text, media and Claude's reason for picking it. |
-| **5. Post** | Polish the text in the editor, copy it, download the media, post on Threads yourself and mark it as posted. |
+| **3. Judge** | Claude rates each item 1–10, matches it to a topic and groups items about the same story so you get one draft per story. Bookmarks are always kept, because you chose them. |
+| **4. Write** | For each kept item, Claude writes a native-sounding post in every enabled language, within your character limit and in your style. |
+| **5. Review & post** | Drafts appear on the board with the original, your languages, media and Claude's reason for picking it. Polish, copy, post and mark as posted. |
 
 ---
 
@@ -67,7 +70,7 @@ flowchart LR
 
 | Part | Cost |
 |---|---|
-| 🧠 AI (translation, judging, edits, web search) | **Included in your Claude plan.** Uses your plan's monthly Agent SDK credit |
+| 🧠 AI (judging, writing in 6 languages, edits, web search) | **Included in your Claude plan.** Uses your plan's monthly Agent SDK credit |
 | 📰 RSS feeds | **Free** |
 | 🔖 X bookmark import | **~$0.001 per bookmark** from X API credits. New X developer accounts get $20 in free credits |
 | 🔎 Paid X search *(optional, off by default)* | ~$0.005 per post read |
@@ -92,8 +95,8 @@ Importing 300 bookmarks a month costs about **$0.30**.
 ### 1. Get the code
 
 ```bash
-git clone https://github.com/RamazanBolatkhan/content-machine.git
-cd content-machine
+git clone https://github.com/RamazanBolatkhan/content_machine.git
+cd content_machine
 npm install
 ```
 
@@ -155,45 +158,56 @@ The app asks only for read access: `tweet.read`, `users.read`, `bookmark.read`, 
 
 ---
 
-## 🎯 Add your games
+## 🎯 Add your topics
 
-Go to **Settings → Games to track** and add one card per game.
+Go to **Settings → Topics to track** and add one card per thing you post about.
 
 | Field | What to put in | Example |
 |---|---|---|
-| **Game** | The name | `GTA 6` |
-| **Keywords** | Names people use for it, one per line. Used by web search and to match general news feeds | `GTA 6`<br>`GTA VI`<br>`Grand Theft Auto VI` |
-| **Feeds** | RSS/Atom feeds that are *only* about this game, one per line | see below |
+| **Topic** | A company, product or theme | `OpenAI` |
+| **Keywords** | Names people use for it, one per line. Used by web search and to match general news feeds | `OpenAI`<br>`ChatGPT`<br>`Sam Altman` |
+| **Feeds** | RSS/Atom feeds that are *only* about this topic, one per line | `https://openai.com/news/rss.xml` |
 
-**Feed recipes:**
+**Topic ideas:** `OpenAI` · `Anthropic & Claude` · `Google Gemini` · `Open-source models` · `AI agents` · `AI image & video`
 
-| Source | Feed URL |
-|---|---|
-| Subreddit (top of the day) | `https://www.reddit.com/r/<SUBREDDIT>/top/.rss?t=day` |
-| Steam news for a game | `https://store.steampowered.com/feeds/news/app/<APP_ID>` *(the number in the game's Steam URL)* |
-| YouTube channel | `https://www.youtube.com/feeds/videos.xml?channel_id=<CHANNEL_ID>` |
-| Most blogs / WordPress sites | `https://<site>/feed` |
+**Feeds that work well** (tested):
 
-Under **Settings → Sources → General news feeds**, add gaming sites that cover many games (e.g. `https://www.gematsu.com/feed`). Their articles are matched to your games by keyword.
+| Source | Feed URL | Best as |
+|---|---|---|
+| OpenAI News | `https://openai.com/news/rss.xml` | topic feed |
+| Google DeepMind | `https://deepmind.google/blog/rss.xml` | topic feed |
+| Google AI blog | `https://blog.google/technology/ai/rss/` | topic feed |
+| Hugging Face blog | `https://huggingface.co/blog/feed.xml` | topic feed (open source) |
+| r/LocalLLaMA (top of the day) | `https://www.reddit.com/r/LocalLLaMA/top/.rss?t=day` | topic feed (open source) |
+| TechCrunch AI | `https://techcrunch.com/category/artificial-intelligence/feed/` | general feed |
+| The Verge AI | `https://www.theverge.com/rss/ai-artificial-intelligence/index.xml` | general feed |
+| MIT Technology Review AI | `https://www.technologyreview.com/topic/artificial-intelligence/feed` | general feed |
+| Hacker News (popular AI posts) | `https://hnrss.org/newest?q=AI+OR+LLM&points=100` | general feed |
+
+Put **general feeds** under **Settings → Sources → General AI news feeds**. Their articles are matched to your topics by keyword. Companies without an RSS feed (e.g. Anthropic) are still covered by Claude web search.
+
+**More recipes:** any subreddit `https://www.reddit.com/r/<NAME>/top/.rss?t=day` · any YouTube channel `https://www.youtube.com/feeds/videos.xml?channel_id=<ID>` · most blogs `https://<site>/feed`
 
 ---
 
 ## 📅 Daily workflow
 
-1. **Scroll X** as usual and **bookmark** posts worth sharing.
+1. **Scroll X** as usual and **bookmark** AI posts worth sharing.
 2. Open the **Drafts** board and press:
    - **📥 Import bookmarks** to turn your new bookmarks into drafts.
-   - **📰 Find news** to collect fresh news for all games, or pick one game from the list.
+   - **📰 Find news** to collect fresh news for all topics, or pick one topic from the list.
 
-   A run takes about 30–60 seconds per game.
-3. Go through the **New** tab. Every card shows the game, the source, Claude's importance score (⭐ 1–10) and why Claude picked it.
+   A run takes about 1–3 minutes per topic.
+3. Go through the **New** tab. Every card shows the topic, the source, Claude's importance score (⭐ 1–10), why Claude picked it, and which languages are ready (🇨🇳 ZH 🇰🇷 KO 🇯🇵 JA …).
 4. Click **✏️ Open editor** on a good one:
-   - Edit by hand, or use the quick buttons (*Сделай короче*, *Убери эмодзи*…) or your own request.
-   - Use **Version history** to go back to any earlier version.
-5. **📋 Copy text**, **⬇️ Download media**, post on Threads, and press **📤 Mark posted**.
+   - Switch between **language tabs**.
+   - Edit by hand, or use the quick buttons (*Make it shorter*, *Explain the technical terms simply*…) or your own request.
+   - Missing a language? Press **✨ Write missing languages**.
+   - Use **Version history** to go back to any earlier version of that language.
+5. **📋 Copy text**, **⬇️ Download media**, post it, and press **📤 Mark posted**.
 
 > [!TIP]
-> Credit the original author or outlet in your post (e.g. *“Источник: @RockstarGames”*). The editor reminds you of the right name.
+> Credit the original author or outlet in your post (e.g. *“Source: OpenAI”*). The editor reminds you of the right name.
 
 ### Run it on a timer (optional)
 
@@ -225,12 +239,13 @@ This keeps running while the terminal window is open.
 
 | Section | Settings |
 |---|---|
-| **Sources** | Turn RSS, Claude web search and paid X search on or off. Set the max bookmarks per import, ignore news older than N hours, and set the max items per game sent to the AI |
-| **Writing & filters** | **Style** (how your Russian posts should sound), **Glossary** (terms never translated, e.g. `PS5`, `early access`), **Blocklist** (words or `@handles` to always skip) |
+| **Sources** | Turn RSS, Claude web search and paid X search on or off. Set general AI news feeds, the max bookmarks per import, ignore news older than N hours, and the max items per topic sent to the AI |
+| **Languages** | Pick which of the six languages to write in, and the **max characters per post**: 500 for Threads, 280 for X without Premium |
+| **Writing & filters** | **Style**, written in any language and applied to all of them. **Glossary**: terms never translated, e.g. `fine-tuning`, `open-source`. **Blocklist**: words or `@handles` to always skip |
 | **Recent runs** | A log of every import and news run, with warnings such as a broken feed |
 
 > [!NOTE]
-> Posts are written in **Russian**. To target another language, change the rules in `translationRules()` in [`src/lib/ai.ts`](src/lib/ai.ts) and your style text in Settings.
+> Want another language? Add it to the list in [`src/lib/languages.ts`](src/lib/languages.ts). It then appears in Settings and the editor automatically.
 
 ---
 
@@ -251,18 +266,20 @@ This keeps running while the terminal window is open.
 ## 🗂️ Project structure
 
 ```
-content-machine/
+content_machine/
 ├── src/
 │   ├── app/                    # Pages (Drafts, Editor, Settings) + API routes
 │   │   ├── api/x/              #   X login (OAuth) + callback
 │   │   └── api/drafts/[id]/    #   AI edit + media zip
-│   ├── components/             # Board buttons, editor, media grid…
+│   ├── components/             # Board buttons, multilingual editor, media grid…
 │   ├── db/schema.ts            # SQLite tables (Drizzle ORM)
 │   └── lib/
 │       ├── agents/scout.ts     # Collect → filter → judge → save
-│       ├── agents/editor.ts    # AI rewrites in the editor
+│       ├── agents/writer.ts    # Writes each post in every enabled language
+│       ├── agents/editor.ts    # AI rewrites + "write missing languages"
+│       ├── languages.ts        # The six languages (add more here)
 │       ├── claude-cli.ts       # Runs `claude -p` on your subscription
-│       ├── ai.ts               # AI provider switch + translation rules
+│       ├── ai.ts               # AI provider switch + writing rules
 │       ├── sources/            # RSS reader, Claude web search
 │       └── x/                  # X OAuth, bookmarks, optional search
 ├── scripts/                    # scout-loop, x-check
@@ -289,7 +306,17 @@ Then restart `npm run dev`.
 <details>
 <summary><b>“Claude error … usage limit” during a run</b></summary>
 
-Your plan's monthly Agent SDK credit is used up, or you've hit a rate limit. Wait for it to reset, lower **Max news items per game**, or turn off **Claude web search** for a while (RSS keeps working).
+Your plan's monthly Agent SDK credit is used up, or you've hit a rate limit. You can:
+- wait for it to reset,
+- write in fewer languages,
+- lower **Max news items per topic**,
+- or turn off **Claude web search** for a while (RSS keeps working).
+</details>
+
+<details>
+<summary><b>A draft is missing some languages</b></summary>
+
+Writing sometimes fails for one item (e.g. a timeout). Open the draft and press **✨ Write missing languages**. The same button helps after you turn on a new language in Settings.
 </details>
 
 <details>
@@ -318,7 +345,7 @@ The site refused the request for now, which is common with Reddit. Only that fee
 
 That usually means there's no fresh news. To get more:
 - add more feeds,
-- add more keywords for the game,
+- add more keywords for the topic,
 - or raise **Ignore news older than**.
 
 Items Claude already judged are never shown again.
@@ -337,7 +364,7 @@ Stop the app and delete the `data/` folder. It's created again on the next start
 - **No scraping.** Content from X comes only through the official X API, and only from **your own bookmarks**. X's terms forbid scraping, and it risks your account.
 - **Credit your sources.** Rewrite the news in your own words and name the original author or outlet.
 - **Personal use of your Claude subscription.** The `claude-code` provider runs Claude Code under your own account, for your own use. If other people use your setup (e.g. a hosted version), switch to `AI_PROVIDER=gateway` with an API key.
-- **Check before posting.** Claude marks rumors as rumors and is told not to invent facts. Still read each draft before it goes live.
+- **Check before posting.** Claude marks rumors and unconfirmed claims as such and is told not to invent facts. Still read each post, especially in languages you don't speak, before it goes live.
 
 ---
 
@@ -349,6 +376,6 @@ Stop the app and delete the `data/` folder. It's created again on the next start
 
 <div align="center">
 
-Made for gaming news creators who'd rather pick great stories than copy-paste all day. 🎮
+Made for AI news creators who'd rather pick great stories than translate all day. 🌍
 
 </div>

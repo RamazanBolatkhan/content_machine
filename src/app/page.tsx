@@ -5,7 +5,8 @@ import { MediaGrid } from "@/components/MediaGrid";
 import { CollectButtons } from "@/components/CollectButtons";
 import { SourceBadge } from "@/components/SourceBadge";
 import { StatusButtons } from "@/components/StatusButtons";
-import { getGames, listDrafts } from "@/lib/queries";
+import { enabledLangs, langInfo } from "@/lib/languages";
+import { getSettings, getTopics, listDrafts } from "@/lib/queries";
 import { formatCount, timeAgo } from "@/lib/util";
 import { xAccount } from "@/lib/x/auth";
 
@@ -25,11 +26,12 @@ export default async function DraftsBoard({ searchParams }: PageProps<"/">) {
   const status = (DRAFT_STATUSES as readonly string[]).includes(String(sp.status))
     ? (sp.status as DraftStatus)
     : "new";
-  const gameId = Number(sp.game) || undefined;
+  const topicId = Number(sp.topic) || undefined;
 
-  const games = getGames();
-  const drafts = listDrafts({ status, gameId });
-  const href = (s: DraftStatus, g?: number) => `/?status=${s}${g ? `&game=${g}` : ""}`;
+  const topics = getTopics();
+  const langs = enabledLangs(getSettings());
+  const drafts = listDrafts({ status, topicId });
+  const href = (s: DraftStatus, t?: number) => `/?status=${s}${t ? `&topic=${t}` : ""}`;
 
   return (
     <div className="space-y-6">
@@ -37,11 +39,11 @@ export default async function DraftsBoard({ searchParams }: PageProps<"/">) {
         <div>
           <h1 className="text-2xl font-semibold">Drafts</h1>
           <p className="text-sm text-zinc-500">
-            Your X bookmarks and fresh gaming news, translated to Russian. Review, edit, then post to Threads yourself.
+            Your X bookmarks and fresh AI news, written in {langs.map((c) => langInfo(c).flag).join(" ")}. Review, edit, then post yourself.
           </p>
         </div>
         <CollectButtons
-          games={games.filter((g) => g.enabled).map((g) => ({ id: g.id, name: g.name }))}
+          topics={topics.filter((t) => t.enabled).map((t) => ({ id: t.id, name: t.name }))}
           xConnected={xAccount() !== null}
         />
       </div>
@@ -50,26 +52,26 @@ export default async function DraftsBoard({ searchParams }: PageProps<"/">) {
         {DRAFT_STATUSES.map((s) => (
           <Link
             key={s}
-            href={href(s, gameId)}
+            href={href(s, topicId)}
             className={`rounded-full px-3 py-1 ${s === status ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900" : "bg-zinc-200 dark:bg-zinc-800"}`}
           >
             {STATUS_LABEL[s]}
           </Link>
         ))}
         <span className="mx-2 text-zinc-300">|</span>
-        <Link href={href(status)} className={!gameId ? "font-semibold" : "text-zinc-500"}>
-          All games
+        <Link href={href(status)} className={!topicId ? "font-semibold" : "text-zinc-500"}>
+          All topics
         </Link>
-        {games.map((g) => (
-          <Link key={g.id} href={href(status, g.id)} className={gameId === g.id ? "font-semibold" : "text-zinc-500"}>
-            {g.name}
+        {topics.map((t) => (
+          <Link key={t.id} href={href(status, t.id)} className={topicId === t.id ? "font-semibold" : "text-zinc-500"}>
+            {t.name}
           </Link>
         ))}
       </div>
 
-      {games.length === 0 ? (
+      {topics.length === 0 ? (
         <div className="card p-8 text-center text-zinc-500">
-          No games yet. <Link href="/settings" className="underline">Add your first game in Settings</Link>.
+          No topics yet. <Link href="/settings" className="underline">Add your first topic in Settings</Link>.
         </div>
       ) : drafts.length === 0 ? (
         <div className="card p-8 text-center text-zinc-500">Nothing here. Bookmark posts on X and press “Import bookmarks”, or press “Find news”.</div>
@@ -79,7 +81,7 @@ export default async function DraftsBoard({ searchParams }: PageProps<"/">) {
             <article key={d.id} className="card flex flex-col gap-3 p-4">
               <div className="flex items-center justify-between gap-2 text-xs text-zinc-500">
                 <span className="flex flex-wrap items-center gap-1.5">
-                  {d.gameName && <span className="rounded bg-zinc-100 px-1.5 py-0.5 dark:bg-zinc-800">🎮 {d.gameName}</span>}
+                  {d.topicName && <span className="rounded bg-zinc-100 px-1.5 py-0.5 dark:bg-zinc-800">🤖 {d.topicName}</span>}
                   <SourceBadge draft={d} />
                   {d.postedAt && <span>· {timeAgo(d.postedAt)}</span>}
                 </span>
@@ -94,7 +96,7 @@ export default async function DraftsBoard({ searchParams }: PageProps<"/">) {
               </div>
 
               <p className="line-clamp-3 text-sm text-zinc-500">{d.originalText}</p>
-              <p className="whitespace-pre-wrap">{d.textRu}</p>
+              <DraftPreview texts={d.texts} langs={langs} />
               <MediaGrid media={d.media} small />
               {d.aiReason && <p className="text-xs text-zinc-500 italic">🤖 {d.aiReason}</p>}
 
@@ -108,6 +110,31 @@ export default async function DraftsBoard({ searchParams }: PageProps<"/">) {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function DraftPreview({ texts, langs }: { texts: Record<string, string>; langs: ReturnType<typeof enabledLangs> }) {
+  const first = langs.find((c) => texts[c]);
+  return (
+    <div className="space-y-2">
+      {first && (
+        <p className="line-clamp-6 whitespace-pre-wrap" lang={first}>
+          <span className="mr-1">{langInfo(first).flag}</span>
+          {texts[first]}
+        </p>
+      )}
+      <div className="flex flex-wrap gap-1 text-xs">
+        {langs.map((c) => (
+          <span
+            key={c}
+            title={texts[c] ? `${langInfo(c).name}: written` : `${langInfo(c).name}: missing`}
+            className={`rounded px-1.5 py-0.5 ${texts[c] ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300" : "bg-zinc-100 text-zinc-400 line-through dark:bg-zinc-800"}`}
+          >
+            {langInfo(c).flag} {c.toUpperCase()}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }

@@ -6,14 +6,15 @@ const createdAt = () =>
     .notNull()
     .default(sql`(unixepoch())`);
 
-export const games = sqliteTable("games", {
+// What the owner posts about, e.g. "OpenAI", "Open-source models", "AI agents"
+export const topics = sqliteTable("topics", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull(),
-  // One search term per line, e.g. "GTA 6", "#GTAVI". Used for web search,
+  // One search term per line, e.g. "ChatGPT", "GPT-5". Used for web search,
   // matching general news feeds and (paid) X search.
   keywords: text("keywords").notNull().default(""),
-  // RSS/Atom feed URLs only about this game, one per line
-  // (subreddit .rss, Steam news, YouTube channel, fan site…)
+  // RSS/Atom feed URLs only about this topic, one per line
+  // (company blog, subreddit .rss, YouTube channel…)
   feeds: text("feeds").notNull().default(""),
   // X handles (without @) that get a bonus in paid X search, one per line
   trustedAccounts: text("trusted_accounts").notNull().default(""),
@@ -31,18 +32,25 @@ export const settings = sqliteTable("settings", {
   webSearchEnabled: integer("web_search_enabled", { mode: "boolean" }).notNull().default(true),
   // Paid X search (~$0.005 per post read), off by default
   xSearchEnabled: integer("x_search_enabled", { mode: "boolean" }).notNull().default(false),
-  // General gaming news feeds, matched to games by keywords, one per line
+  // General AI news feeds, matched to topics by keywords, one per line
   newsFeeds: text("news_feeds").notNull().default(""),
   // Ignore news / posts older than this
   maxAgeHours: integer("max_age_hours").notNull().default(48),
-  // Max news items per game sent to the AI per run
-  candidatesPerGame: integer("candidates_per_game").notNull().default(15),
+  // Max news items per topic sent to the AI per run
+  candidatesPerTopic: integer("candidates_per_topic").notNull().default(15),
   // --- Paid X search only ---
   minLikes: integer("min_likes").notNull().default(100),
   minViews: integer("min_views").notNull().default(0),
-  fetchPerGame: integer("fetch_per_game").notNull().default(30),
+  fetchPerTopic: integer("fetch_per_topic").notNull().default(30),
   searchLang: text("search_lang").notNull().default("en"),
   // --- Filters & writing ---
+  // Languages every post is written in (codes from src/lib/languages.ts)
+  languages: text("languages", { mode: "json" })
+    .$type<string[]>()
+    .notNull()
+    .default(["zh", "ko", "ja", "ru", "es", "pt"]),
+  // Max characters per post (500 = Threads)
+  charLimit: integer("char_limit").notNull().default(500),
   // Words / @handles to always skip, one per line
   blocklist: text("blocklist").notNull().default(""),
   stylePrompt: text("style_prompt").notNull().default(""),
@@ -82,7 +90,7 @@ export const drafts = sqliteTable("drafts", {
   sourceName: text("source_name").notNull().default(""),
   // X handle without @ ("" for news)
   authorHandle: text("author_handle").notNull().default(""),
-  gameId: integer("game_id").references(() => games.id, { onDelete: "set null" }),
+  topicId: integer("topic_id").references(() => topics.id, { onDelete: "set null" }),
   originalText: text("original_text").notNull(),
   postedAt: integer("posted_at", { mode: "timestamp" }),
   // Only for X posts
@@ -103,7 +111,9 @@ export const draftVersions = sqliteTable("draft_versions", {
   draftId: integer("draft_id")
     .notNull()
     .references(() => drafts.id, { onDelete: "cascade" }),
-  textRu: text("text_ru").notNull(),
+  // Language code, e.g. "ja" (see src/lib/languages.ts)
+  lang: text("lang").notNull(),
+  text: text("text").notNull(),
   source: text("source", { enum: VERSION_SOURCES }).notNull(),
   instruction: text("instruction"),
   createdAt: createdAt(),
@@ -114,7 +124,7 @@ export const RUN_KINDS = ["bookmarks", "news"] as const;
 export const scoutRuns = sqliteTable("scout_runs", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   kind: text("kind", { enum: RUN_KINDS }).notNull(),
-  gameId: integer("game_id").references(() => games.id, { onDelete: "set null" }),
+  topicId: integer("topic_id").references(() => topics.id, { onDelete: "set null" }),
   startedAt: integer("started_at", { mode: "timestamp" }).notNull(),
   finishedAt: integer("finished_at", { mode: "timestamp" }),
   // Items read from all sources
@@ -146,7 +156,7 @@ export const xAuth = sqliteTable("x_auth", {
   codeVerifier: text("code_verifier"),
 });
 
-export type Game = typeof games.$inferSelect;
+export type Topic = typeof topics.$inferSelect;
 export type Settings = typeof settings.$inferSelect;
 export type Draft = typeof drafts.$inferSelect;
 export type DraftVersion = typeof draftVersions.$inferSelect;

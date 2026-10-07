@@ -69,17 +69,17 @@ export async function aiText(task: AiTask): Promise<string> {
   return text;
 }
 
-export const DEFAULT_STYLE = `Пиши как живой игровой новостной аккаунт в Threads: коротко, по делу, без канцелярита.
-Первая строка — цепляющая суть новости. Можно 1–2 уместных эмодзи. Без хэштегов, если не просят.
-Не выдумывай факты, которых нет в источнике. Слухи помечай как слухи.`;
+export const DEFAULT_STYLE = `Write like a sharp, friendly AI news account: short, clear, no corporate fluff.
+First line = the hook (what happened and why it matters). 1–2 fitting emoji are fine. No hashtags unless asked.
+Explain jargon in a few words for non-experts. Never invent facts that are not in the source. Mark rumors and leaks as unconfirmed.`;
 
-/** Shared translation rules for the scout and editor agents. */
-export function translationRules(settings: Settings): string {
+/** Shared writing rules for the scout, translator and editor agents. */
+export function writingRules(settings: Settings): string {
   const glossary = lines(settings.glossary);
   return [
-    "Target language: Russian. Target platform: Threads (max 500 characters).",
-    "Write a natural Russian post for a gaming audience, not a word-for-word translation.",
-    "Keep game titles, studio names, platform names and well-known gaming terms in their original form.",
+    `Posts are for social media (e.g. Threads, X). Max ${settings.charLimit} characters per post, including spaces and emoji.`,
+    "Write a natural, native-sounding post in each target language, not a word-for-word translation, adapted to how people in that language talk about tech.",
+    "Keep product, model, company and person names in their original form (e.g. ChatGPT, Claude, Gemini, OpenAI, GPT-5, Llama).",
     glossary.length ? `Never translate these terms: ${glossary.join(", ")}.` : "",
     `Style guide:\n${settings.stylePrompt.trim() || DEFAULT_STYLE}`,
   ]

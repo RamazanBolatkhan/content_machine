@@ -5,10 +5,10 @@ import { useActionState } from "react";
 import { collectAction, type CollectState } from "@/app/actions";
 
 export function CollectButtons({
-  games,
+  topics,
   xConnected,
 }: {
-  games: { id: number; name: string }[];
+  topics: { id: number; name: string }[];
   xConnected: boolean;
 }) {
   const [state, action, pending] = useActionState<CollectState, FormData>(collectAction, null);
@@ -30,23 +30,23 @@ export function CollectButtons({
         )}
         <form action={action} className="flex items-center gap-2">
           <input type="hidden" name="kind" value="news" />
-          <select name="gameId" className="input w-auto" disabled={pending}>
-            <option value="">All games</option>
-            {games.map((g) => (
-              <option key={g.id} value={g.id}>
-                {g.name}
+          <select name="topicId" className="input w-auto" disabled={pending}>
+            <option value="">All topics</option>
+            {topics.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
               </option>
             ))}
           </select>
-          <button className="btn btn-primary" disabled={pending || games.length === 0}>
+          <button className="btn btn-primary" disabled={pending || topics.length === 0}>
             📰 Find news
           </button>
         </form>
       </div>
-      {pending && <p className="text-xs text-zinc-500">Working… Claude reads and translates, ~1–2 min per game.</p>}
+      {pending && <p className="text-xs text-zinc-500">Working… Claude reads, picks and writes in every language, ~1–3 min per topic.</p>}
       {state && !pending && (
         <ul className="max-w-xl text-right text-xs text-zinc-500">
-          {state.results.length === 0 && <li>No enabled games.</li>}
+          {state.results.length === 0 && <li>No enabled topics.</li>}
           {state.results.map((r) => (
             <li key={r.label} className={r.error ? "text-rose-600" : ""}>
               {r.label}: found {r.read}, checked {r.candidates}, <b>{r.saved} new drafts</b>

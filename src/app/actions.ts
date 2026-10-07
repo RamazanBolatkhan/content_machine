@@ -5,6 +5,8 @@ import { eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { DRAFT_STATUSES, type DraftStatus } from "@/db/schema";
 import { findNews, syncBookmarks, type RunResult } from "@/lib/agents/scout";
+import { writeMissingLanguages } from "@/lib/agents/editor";
+import { isLangCode, LANG_CODES } from "@/lib/languages";
 import { disconnectX } from "@/lib/x/auth";
 
 export type CollectState = { results: RunResult[]; at: number } | null;
@@ -13,7 +15,7 @@ export async function collectAction(_prev: CollectState, formData: FormData): Pr
   const results =
     formData.get("kind") === "bookmarks"
       ? [await syncBookmarks()]
-      : await findNews(Number(formData.get("gameId")) || undefined);
+      : await findNews(Number(formData.get("topicId")) || undefined);
   revalidatePath("/");
   revalidatePath("/settings");
   return { results, at: Date.now() };
@@ -31,12 +33,23 @@ export async function setDraftStatus(draftId: number, status: DraftStatus) {
   revalidatePath(`/drafts/${draftId}`);
 }
 
-export async function saveManualVersion(draftId: number, textRu: string) {
-  const text = textRu.trim();
-  if (!text) return;
-  db.insert(schema.draftVersions).values({ draftId, textRu: text, source: "manual" }).run();
+export async function saveManualVersion(draftId: number, lang: string, value: string) {
+  const text = value.trim();
+  if (!text || !isLangCode(lang)) return;
+  db.insert(schema.draftVersions).values({ draftId, lang, text, source: "manual" }).run();
   revalidatePath(`/drafts/${draftId}`);
   revalidatePath("/");
+}
+
+export async function writeMissingLanguagesAction(draftId: number): Promise<{ written: number; error?: string }> {
+  try {
+    const written = await writeMissingLanguages(draftId);
+    revalidatePath(`/drafts/${draftId}`);
+    revalidatePath("/");
+    return { written };
+  } catch (e) {
+    return { written: 0, error: e instanceof Error ? e.message : String(e) };
+  }
 }
 
 export async function deleteDraft(draftId: number) {
@@ -54,7 +67,7 @@ const int = (f: FormData, k: string, fallback: number) => {
 const clamp = (n: number, min: number, max: number) => Math.min(max, Math.max(min, n));
 const bool = (f: FormData, k: string) => f.get(k) === "on";
 
-export async function saveGame(formData: FormData) {
+export async function saveTopic(formData: FormData) {
   const id = Number(formData.get("id")) || undefined;
   const values = {
     name: text(formData, "name"),
@@ -64,15 +77,15 @@ export async function saveGame(formData: FormData) {
     enabled: formData.get("enabled") === "on",
   };
   if (!values.name) return;
-  if (id) db.update(schema.games).set(values).where(eq(schema.games.id, id)).run();
-  else db.insert(schema.games).values(values).run();
+  if (id) db.update(schema.topics).set(values).where(eq(schema.topics.id, id)).run();
+  else db.insert(schema.topics).values(values).run();
   revalidatePath("/settings");
   revalidatePath("/");
 }
 
-export async function deleteGame(formData: FormData) {
+export async function deleteTopic(formData: FormData) {
   const id = Number(formData.get("id"));
-  if (id) db.delete(schema.games).where(eq(schema.games.id, id)).run();
+  if (id) db.delete(schema.topics).where(eq(schema.topics.id, id)).run();
   revalidatePath("/settings");
   revalidatePath("/");
 }
@@ -86,11 +99,13 @@ export async function saveSettings(formData: FormData) {
       xSearchEnabled: bool(formData, "xSearchEnabled"),
       newsFeeds: text(formData, "newsFeeds"),
       maxAgeHours: clamp(int(formData, "maxAgeHours", 48), 1, 167),
-      candidatesPerGame: clamp(int(formData, "candidatesPerGame", 15), 1, 40),
+      candidatesPerTopic: clamp(int(formData, "candidatesPerTopic", 15), 1, 40),
       minLikes: int(formData, "minLikes", 100),
       minViews: int(formData, "minViews", 0),
-      fetchPerGame: clamp(int(formData, "fetchPerGame", 30), 10, 100),
+      fetchPerTopic: clamp(int(formData, "fetchPerTopic", 30), 10, 100),
       searchLang: text(formData, "searchLang"),
+      languages: LANG_CODES.filter((code) => formData.get(`lang_${code}`) === "on"),
+      charLimit: clamp(int(formData, "charLimit", 500), 50, 10_000),
       blocklist: text(formData, "blocklist"),
       stylePrompt: text(formData, "stylePrompt"),
       glossary: text(formData, "glossary"),

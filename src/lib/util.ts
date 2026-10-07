@@ -22,4 +22,3 @@ export function timeAgo(date: Date | null | undefined): string {
   return `${Math.round(hours / 24)}d ago`;
 }
 
-export const THREADS_CHAR_LIMIT = 500;

@@ -9,7 +9,7 @@ const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"]
 
 export const metadata: Metadata = {
   title: "Content Machine",
-  description: "Turn X bookmarks and gaming news into Russian Threads posts",
+  description: "Turn X bookmarks and AI news into ready-to-post social posts in six languages",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
@@ -21,7 +21,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <header className="border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
           <nav className="mx-auto flex max-w-6xl items-center gap-6 px-4 py-3">
             <Link href="/" className="font-semibold">
-              🎮 Content Machine
+              🤖 Content Machine
             </Link>
             <Link href="/" className="text-sm text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100">
               Drafts
