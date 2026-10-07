@@ -337,3 +337,12 @@ Each AI or hand edit creates a new version, so changes can be undone.
 - `searchWebNews(subject, hints, …)` is the generic web search (topic search reuses it). The prompt now asks Claude to search several times and aim for a full list, because it used to return 0–1 items when unsure of dates.
 - Board: "Find like my top posts" button (or "Add top posts" when there are none), plus an elapsed-time counter while a search runs.
 - **Verified (web only, DB copy):** 2 Russian sample posts → 4 themes (doomscrolling, loneliness, small social connections, digital wellbeing) → 9 found → 4 kept, all on-theme, in 120 s.
+
+## 19. Hosted on Vercel, worker on the Mac (2026-10-07)
+
+- **Why:** the owner wants the site online, with X + Claude (subscription) staying local.
+- **Data:** SQLite → **Neon Postgres** (Vercel Marketplace, free plan, `DATABASE_URL`). Drizzle `pg-core` + `node-postgres` (`src/db/index.ts`), migrations in `drizzle/` (`npm run db:migrate`). Media → **Vercel Blob** (public store `content-machine-media`); `MediaItem.file` is now a Blob URL. One-time import: `scripts/import-sqlite.ts` (81 drafts, 144 versions, X login, 31/32 media; the 393 MB video stays remote). The old `data/app.db` is kept as a local backup.
+- **Jobs:** the `jobs` table is the queue (kinds: find_news, bookmarks, similar, write, edit, improve_topic, add_top_posts, set_top_text, delete_top_post, rebuild_profile). The UI queues via the `startJob` server action and polls `/api/jobs/[id]` (`useJob` hook, shows "Waiting for your Mac worker…" when offline). `scripts/worker.ts` claims jobs with `FOR UPDATE SKIP LOCKED` (2 at a time), writes a heartbeat to `worker_status` every 30 s, and marks stale running jobs as errors on start. `npm run dev` = `next dev` + worker (concurrently).
+- **Auth:** `APP_PASSWORD` (Vercel env) → `src/proxy.ts` requires a cookie (SHA-256 of the password), `/login` sets it, API answers 401. Locally (no APP_PASSWORD) the site is open. X login stays local (callback 127.0.0.1); its tokens are in Postgres, so the worker uses them.
+- **Production:** https://content-machine-henna-sigma.vercel.app (Vercel project `content-machine`).
+- **Verified:** migrations + import; a real "write" job ran end to end in 10 s; the live site redirects to /login, pages load with the cookie, the API returns 401 without it, and the worker shows offline when stopped.

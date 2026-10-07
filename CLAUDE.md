@@ -4,7 +4,7 @@ Local web app for an **AI news** account: collects the owner's **X bookmarks** (
 
 **Read [docs/PROJECT_SCHEME.md](docs/PROJECT_SCHEME.md) first**, especially sections 13–14 (current design, decisions, code map). Setup steps: [README.md](README.md).
 
-Stack: Next.js 16 (App Router) + Tailwind, SQLite via Drizzle (`data/app.db`), AI via `claude -p` (`src/lib/claude-cli.ts`) or optionally AI SDK 7 + Vercel AI Gateway (`AI_PROVIDER=gateway`).
+Stack: Next.js 16 (App Router) + Tailwind, **Postgres (Neon) via Drizzle + node-postgres**, Vercel Blob for media, hosted on Vercel (password via `APP_PASSWORD`, `src/proxy.ts`). Everything needing X or Claude runs as a **job** (`jobs` table) executed by the local **worker** (`scripts/worker.ts`, started by `npm run dev`); AI via `claude -p` (`src/lib/claude-cli.ts`) or optionally AI SDK 7 + Vercel AI Gateway (`AI_PROVIDER=gateway`).
 
 Design (see `src/app/globals.css`): based on Motorway's "The Highway Code" design system (type scale `.t-h1…t-caption`, spacing 4/8/16/24/32/40/48/56/64, `.btn`, `.chip`, `.badge`, `.card`, `.infobox`, `.input`, `.segmented`). **Only black, gray and white**: use the tokens `bg`, `surface`, `surface-2`, `fg`, `muted`, `subtle`, `line`, `inverse`, `on-inverse`; never Tailwind color palettes, colored emoji or flags in the UI. Icons are `lucide-react`. Light and dark mode both supported. Logo: `src/components/Logo.tsx` (`LogoMark`, square or circle), favicon `src/app/icon.svg` (round), README image `docs/logo.png`.
 
@@ -13,7 +13,8 @@ Rules:
 - Never give the AI a write/post tool for X or Threads. X access stays read-only.
 - No scraping of X (X's terms forbid it, risk of account ban). X data only via the official API.
 - The owner wants ~zero running cost: don't add paid APIs or per-token AI by default.
-- Schema change → edit `src/db/schema.ts`, then `npm run db:generate`.
+- Schema change → edit `src/db/schema.ts`, then `npm run db:generate` and `npm run db:migrate`.
+- DB calls are async (`await db.select()…`). New work that needs X/Claude = a new job kind (`src/db/schema.ts` JOB_KINDS, `src/lib/jobs/payloads.ts`, `src/lib/jobs/run.ts`) called from the UI with `useJob()`; never run Claude/X inside a Vercel request.
 - Check with `npm run typecheck`, `npm run lint`, `npm run build`.
 
 @AGENTS.md

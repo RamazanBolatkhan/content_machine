@@ -72,6 +72,21 @@ flowchart LR
 
 ---
 
+## 🏗️ How it runs
+
+```
+   Website (Vercel, or your Mac)          Worker (your Mac: `npm run dev`)
+   board · editor · settings      ──▶ jobs ──▶  X API + Claude Code (subscription)
+            │                                         │
+            └──────── Postgres (Neon) + Vercel Blob ◀─┘
+```
+
+- **The website** shows and edits everything stored in **Postgres**. Pictures live in **Vercel Blob**. Host it on Vercel to open it from anywhere, including your phone, behind a password.
+- **The worker** runs on your own computer. When you press *Find*, *Write it*, *Ask AI*… the website queues a **job**, and the worker does it with X and **your local Claude Code**, then saves the result. If your computer is off, jobs simply wait.
+- `npm run dev` starts both the website and the worker locally.
+
+---
+
 ## 💸 What it costs
 
 | Part | Cost |
@@ -79,6 +94,7 @@ flowchart LR
 | 🧠 AI (judging, writing in 6 languages, edits, web search) | **Included in your Claude plan.** Uses your plan's monthly Agent SDK credit |
 | 📰 RSS feeds | **Free** |
 | 🔖 X bookmark import | **~$0.001 per bookmark** from X API credits. New X developer accounts get $20 in free credits |
+| 🗄️ Postgres (Neon) + Vercel Blob + Vercel hosting | **Free tiers** are enough for one person |
 | 🔎 X post search *(optional, off by default)* | ~$0.005 per post read. One run with 3 accounts and 30 posts per query is about $0.15–0.30 per topic |
 
 Importing 300 bookmarks a month costs about **$0.30**.
@@ -92,7 +108,8 @@ Importing 300 bookmarks a month costs about **$0.30**.
 | **Computer** | macOS, Linux or Windows (WSL recommended) |
 | **Node.js** | **22 or newer** (check with `node -v`) |
 | **Claude Code** | Installed and logged in with a Claude subscription (Pro or Max). See the [Claude Code docs](https://code.claude.com/docs) |
-| **X developer account** | Optional, only needed for bookmark import ([console.x.com](https://console.x.com)) |
+| **Postgres database** | A free [Neon](https://neon.com) database is easiest (Vercel can create one for you, see below). Any Postgres works |
+| **X developer account** | Optional, for bookmark import and X search ([console.x.com](https://console.x.com)) |
 
 ---
 
@@ -113,26 +130,49 @@ claude --version   # should print a version
 claude             # run once and log in with your Claude account, then exit
 ```
 
-### 3. Create your config file
+### 3. Create your config file and database
 
 ```bash
 cp .env.example .env.local
 ```
 
-The defaults already use Claude Code, so you can leave the file as it is for now.
+Put a Postgres connection string in `.env.local` as `DATABASE_URL=…`. With Vercel this is automatic:
+
+```bash
+npm i -g vercel && vercel login
+vercel link                                         # create/link a Vercel project
+vercel integration add neon                         # free Postgres, connected to the project
+vercel blob create-store content-machine-media --access public   # optional: picture storage
+vercel env pull .env.local                          # writes DATABASE_URL + BLOB_READ_WRITE_TOKEN (keeps your other keys)
+```
+
+Then create the tables:
+
+```bash
+npm run db:migrate
+```
 
 ### 4. Start the app
 
 ```bash
-npm run dev
+npm run dev     # website + worker
 ```
 
-Open **[http://127.0.0.1:3000](http://127.0.0.1:3000)**. Open **Settings**: under *Connections* it should say **✅ Claude Code on your subscription**.
+Open **[http://127.0.0.1:3000](http://127.0.0.1:3000)**. In **Settings → Connections** it should say **Your Mac worker: Online** and **AI: Claude Code on your subscription**.
 
 > [!TIP]
 > Always open the app at `127.0.0.1:3000`, not `localhost:3000`. X login only accepts the exact address you register.
 
-The database (`data/app.db`) is created automatically on first start.
+Without `BLOB_READ_WRITE_TOKEN`, pictures aren't copied: cards show them straight from the source instead.
+
+### 5. Put it online (optional)
+
+```bash
+vercel env add APP_PASSWORD production   # the password for the website
+vercel deploy --prod
+```
+
+Open the URL Vercel prints and sign in. Keep `npm run dev` (or just `npm run worker`) running on your computer: that's what does the searching and writing. Connect your X account from the local app (`127.0.0.1:3000`); the login is stored in the database, so the worker can use it.
 
 ---
 
@@ -255,6 +295,9 @@ This keeps running while the terminal window is open.
 | `X_CLIENT_SECRET` | – | Only for X apps of type *Web App* |
 | `X_REDIRECT_URI` | `http://127.0.0.1:3000/api/x/callback` | Change it if you run on another port |
 | `X_BEARER_TOKEN` | – | For X post search (Bearer Token from your X app's *Keys and tokens*) |
+| `DATABASE_URL` | – | Postgres connection string (required) |
+| `BLOB_READ_WRITE_TOKEN` | – | Vercel Blob token for storing pictures (optional) |
+| `APP_PASSWORD` | – | Password for the website. Set it on Vercel; leave it empty locally for no login |
 
 ### In-app settings
 
@@ -274,8 +317,10 @@ This keeps running while the terminal window is open.
 
 | Command | What it does |
 |---|---|
-| `npm run dev` | Start the app at `http://127.0.0.1:3000` |
-| `npm run build` / `npm start` | Production build and run (still local) |
+| `npm run dev` | Start the website at `http://127.0.0.1:3000` **and** the worker |
+| `npm run worker` | Only the worker (e.g. while you use the Vercel site) |
+| `npm run db:migrate` | Create/update the database tables |
+| `npm run build` / `npm start` | Production build and run |
 | `npm run scout:loop -- <minutes>` | Collect automatically on a timer |
 | `npm run typecheck` | TypeScript check |
 | `npm run lint` | ESLint |
@@ -291,9 +336,10 @@ content_machine/
 ├── src/
 │   ├── app/                    # Pages (Drafts, Editor, Settings) + API routes
 │   │   ├── api/x/              #   X login (OAuth) + callback
-│   │   └── api/drafts/[id]/    #   AI edit + media zip
+│   │   ├── api/jobs/[id]/      #   Job status (polled by the page)
+│   │   └── api/drafts/[id]/    #   Media zip
 │   ├── components/             # Board buttons, multilingual editor, media grid…
-│   ├── db/schema.ts            # SQLite tables (Drizzle ORM)
+│   ├── db/schema.ts            # Postgres tables (Drizzle ORM), incl. the jobs queue
 │   └── lib/
 │       ├── agents/scout.ts     # Collect → filter → judge → save
 │       ├── agents/writer.ts    # Writes each post in every enabled language
@@ -303,10 +349,9 @@ content_machine/
 │       ├── ai.ts               # AI provider switch + writing rules
 │       ├── sources/            # RSS reader, Claude web search
 │       └── x/                  # X OAuth, bookmarks, optional search
-├── scripts/                    # scout-loop, x-check
+├── scripts/                    # worker, scout-loop, x-check, import-sqlite
 ├── drizzle/                    # Database migrations (applied automatically)
 ├── docs/PROJECT_SCHEME.md      # Design notes and decisions
-└── data/                       # Your database + media (git-ignored)
 ```
 
 ---
@@ -373,9 +418,15 @@ Items Claude already judged are never shown again.
 </details>
 
 <details>
+<summary><b>Buttons say “Waiting for your Mac worker…”</b></summary>
+
+Searching, writing and AI edits run on your computer. Start `npm run dev` (or `npm run worker`) in the project folder; queued jobs then run automatically.
+</details>
+
+<details>
 <summary><b>I want to start over with an empty database</b></summary>
 
-Stop the app and delete the `data/` folder. It's created again on the next start. This deletes all drafts and settings.
+Delete the tables in your Postgres database (e.g. in the Neon console) and run `npm run db:migrate` again. This deletes all drafts and settings.
 </details>
 
 ---
