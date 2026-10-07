@@ -1,4 +1,5 @@
 import { createMCPClient, type MCPClient } from "@ai-sdk/mcp";
+import type { NewsItem } from "@/lib/sources/types";
 import { findV2Payload, parseV2Posts, POST_FIELDS, type V2Payload, type XPost } from "./parse";
 
 export type { XPost } from "./parse";
@@ -17,7 +18,10 @@ const mode = () => (process.env.X_MODE === "direct" ? "direct" : "mcp");
 
 /** Read-only tools the AI may use. Anything else from the server is dropped. */
 export function toolAllowlist(): string[] {
-  return (process.env.X_API_TOOL_ALLOWLIST ?? "searchPostsRecent,getPostsByIds,getUsersByUsername")
+  return (
+    process.env.X_API_TOOL_ALLOWLIST ??
+    "search_posts_recent,search_posts_all,get_posts_by_ids,get_users_by_username,searchPostsRecent,getPostsByIds,getUsersByUsername"
+  )
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
@@ -60,22 +64,39 @@ function toToolArgs(params: Record<string, string | number | readonly string[]>,
   return args;
 }
 
+// X search allows ~1 request per second: space calls out
+let lastSearchAt = 0;
+async function pace() {
+  const wait = lastSearchAt + 1200 - Date.now();
+  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+  lastSearchAt = Date.now();
+}
+
+/**
+ * Call the first X MCP tool that exists, out of several possible names
+ * (the hosted server uses snake_case, e.g. search_posts_all; self-hosted xmcp uses operationIds).
+ */
 async function callXTool(
-  toolName: string,
+  toolNames: string[],
   params: Record<string, string | number | readonly string[]>,
 ): Promise<V2Payload> {
+  await pace();
   const client = await connectXMcp();
   try {
     const { tools } = await client.listTools();
-    const tool = tools.find((t) => t.name === toolName);
+    const tool = toolNames.map((name) => tools.find((t) => t.name === name)).find(Boolean);
     if (!tool) {
-      throw new Error(
-        `X MCP has no tool "${toolName}". Available: ${tools.map((t) => t.name).slice(0, 30).join(", ")}…`,
-      );
+      throw new Error(`X MCP has none of ${toolNames.join(", ")}. Available: ${tools.map((t) => t.name).join(", ")}`);
     }
+    const toolName = tool.name;
+    const props = (tool.inputSchema as JsonSchema).properties ?? {};
+    // The hosted server names "tweet.fields" "post.fields"
+    const renamed = Object.fromEntries(
+      Object.entries(params).map(([k, v]) => [k === "tweet.fields" && "post.fields" in props ? "post.fields" : k, v]),
+    );
     const result = await client.callTool({
       name: toolName,
-      arguments: toToolArgs(params, tool.inputSchema as JsonSchema),
+      arguments: toToolArgs(renamed, tool.inputSchema as JsonSchema),
     });
     const payload = findV2Payload(result);
     if (result.isError || !payload) {
@@ -117,7 +138,7 @@ export async function searchRecentPosts({ query, maxResults, sinceHours }: Searc
   };
   const payload =
     mode() === "mcp"
-      ? await callXTool("searchPostsRecent", params)
+      ? await callXTool(["search_posts_recent", "searchPostsRecent", "search_posts_all"], params)
       : await callXApi("tweets/search/recent", params);
   return parseV2Posts(payload);
 }
@@ -126,6 +147,37 @@ export async function getPostsByIds(ids: string[]): Promise<XPost[]> {
   if (!ids.length) return [];
   const params = { ids: ids.slice(0, 100), ...POST_FIELDS };
   const payload =
-    mode() === "mcp" ? await callXTool("getPostsByIds", params) : await callXApi("tweets", params);
+    mode() === "mcp" ? await callXTool(["get_posts_by_ids", "getPostsByIds"], params) : await callXApi("tweets", params);
   return parseV2Posts(payload);
+}
+
+type XNewsStory = { id: string; name?: string; hook?: string; summary?: string; url?: string; updated_at?: string };
+
+/**
+ * X News: stories X builds from what's trending (title + summary), via the hosted MCP server.
+ * Returns [] in direct mode or when the server has no such tool.
+ */
+export async function searchXNews(query: string, maxResults: number, maxAgeHours: number): Promise<NewsItem[]> {
+  if (mode() !== "mcp") return [];
+  await pace();
+  const client = await connectXMcp();
+  try {
+    const { tools } = await client.listTools();
+    if (!tools.some((t) => t.name === "search_news")) return [];
+    const result = await client.callTool({
+      name: "search_news",
+      arguments: { query, max_results: maxResults, max_age_hours: Math.min(maxAgeHours, 167) },
+    });
+    const payload = findV2Payload(result) as { data?: XNewsStory[] } | null;
+    if (result.isError || !payload) throw new Error(`X News failed: ${JSON.stringify(result).slice(0, 300)}`);
+    return (Array.isArray(payload.data) ? payload.data : []).map((s) => ({
+      url: s.url ?? `https://x.com/i/trending/${s.id}`,
+      title: s.name ?? "",
+      summary: [s.hook, s.summary].filter(Boolean).join("\n\n"),
+      sourceName: "X News",
+      publishedAt: s.updated_at ? new Date(s.updated_at) : null,
+    }));
+  } finally {
+    await client.close();
+  }
 }

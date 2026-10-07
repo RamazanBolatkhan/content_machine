@@ -305,3 +305,11 @@ Each AI or hand edit creates a new version, so changes can be undone.
 - **Tested feeds** for AI news are listed in README (OpenAI, DeepMind, Google AI, Hugging Face, r/LocalLLaMA, TechCrunch AI, The Verge AI, MIT Tech Review, hnrss). Anthropic has no RSS; web search covers it.
 
 **Verified 2026-10-07:** topic "OpenAI" with the OpenAI RSS feed, TechCrunch AI and web search → 3 drafts in 70 s, each in all 6 languages within 500 chars, with sensible importance scores. Japanese AI edit with an English instruction stayed in Japanese (4 s). Write-missing-languages refilled a deleted Korean version. All pages render. **Still not verified:** the real X OAuth login and bookmarks call.
+
+## 15. X post search as a main source + board language view (2026-10-07)
+
+- **X search via the hosted MCP server works** (`https://api.x.com/mcp`, app Bearer Token). Its tool names are snake_case (`search_posts_all`, `get_posts_by_ids`, `search_news`), and it takes `post.fields` instead of `tweet.fields`. `callXTool` picks the first existing name and renames fields. Calls are spaced ≥1.2 s apart (`pace()`), because full-archive search allows ~1 req/s.
+- **Popularity:** `min_faves` is not available on this plan, and keyword/relevancy/`is:verified` searches return mostly 0-like posts. So per topic, X search runs: (1) **accounts to watch** (`topics.trusted_accounts` → `from:a OR from:b`, ≤20 per query), which gives popular posts; (2) a keyword query filtered by `minLikes`; (3) **X News** (`search_news`, source `x_news`), X's trending story summaries. Candidates are interleaved: X posts by score, news newest first.
+- **Board:** a "Show cards in" switcher (`?lang=`): the Original (default) or any enabled language. Previously cards showed only the first language (Chinese), which the owner couldn't read.
+- Fresh installs keep X search **off** by default (it costs money). The owner's own DB has it switched on.
+- **Verified:** topic OpenAI with 4 accounts to watch → 4 drafts in 45 s (OpenAI posts with 34k and 3k likes, plus 2 X News stories), all 6 languages.

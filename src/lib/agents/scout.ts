@@ -12,7 +12,7 @@ import { searchTopicNews } from "@/lib/sources/web-search";
 import { getSettings } from "@/lib/queries";
 import { lines } from "@/lib/util";
 import { fetchNewBookmarks } from "@/lib/x/bookmarks";
-import { searchRecentPosts, xConfigured, type XPost } from "@/lib/x/client";
+import { searchRecentPosts, searchXNews, xConfigured, type XPost } from "@/lib/x/client";
 
 export type RunResult = {
   label: string;
@@ -116,14 +116,22 @@ function matchesTopic(item: NewsItem, topic: Topic): boolean {
   return lines(topic.keywords).some((k) => text.includes(k.toLowerCase().replace(/^"|"$/g, "")));
 }
 
-// ---------- paid X search (off by default) ----------
+// ---------- X search (paid, ~$0.005 per post read) ----------
 
+/** Keyword search: finds everything, popular or not (most posts have few likes). */
 export function buildQuery(topic: Topic, settings: Settings): string {
   const terms = lines(topic.keywords).map((k) => (/\s/.test(k) && !k.startsWith('"') ? `"${k}"` : k));
   if (!terms.length) throw new Error(`Topic "${topic.name}" has no keywords`);
   const parts = [`(${terms.join(" OR ")})`, "-is:retweet", "-is:reply"];
   if (settings.searchLang) parts.push(`lang:${settings.searchLang}`);
   return parts.join(" ");
+}
+
+const handlesOf = (topic: Topic) => lines(topic.trustedAccounts).map((h) => h.replace(/^@/, ""));
+
+/** Posts from the topic's accounts to watch: the reliable way to get popular posts. */
+export function buildAccountsQuery(handles: string[]): string {
+  return `(${handles.map((h) => `from:${h}`).join(" OR ")}) -is:retweet -is:reply`;
 }
 
 /** Engagement per hour, so fast-rising posts beat old viral ones. */
@@ -136,20 +144,29 @@ export function scorePost(post: XPost, trusted: Set<string>): number {
   return Math.round((engagement / Math.pow(ageHours + 2, 1.2)) * bonus * 10) / 10;
 }
 
-async function xSearchCandidates(topic: Topic, settings: Settings): Promise<Candidate[]> {
-  const posts = await searchRecentPosts({
-    query: buildQuery(topic, settings),
-    maxResults: settings.fetchPerTopic,
-    sinceHours: settings.maxAgeHours,
-  });
-  const trusted = new Set(lines(topic.trustedAccounts).map((h) => h.replace(/^@/, "").toLowerCase()));
+async function xSearchCandidates(topic: Topic, settings: Settings, warn: (m: string) => void): Promise<Candidate[]> {
+  const queries: string[] = [];
+  const handles = handlesOf(topic);
+  // X limits query length: ~20 accounts per query
+  for (let i = 0; i < handles.length; i += 20) queries.push(buildAccountsQuery(handles.slice(i, i + 20)));
+  if (lines(topic.keywords).length) queries.push(buildQuery(topic, settings));
+
+  const posts: XPost[] = [];
+  for (const query of queries) {
+    try {
+      posts.push(...(await searchRecentPosts({ query, maxResults: settings.fetchPerTopic, sinceHours: settings.maxAgeHours })));
+    } catch (e) {
+      warn(`X search "${query.slice(0, 60)}…": ${e instanceof Error ? e.message : e}`);
+    }
+  }
+  const trusted = new Set(handles.map((h) => h.toLowerCase()));
   return posts
     .filter((p) => !p.isReply)
     .filter((p) => p.metrics.likes >= settings.minLikes || trusted.has(p.authorHandle.toLowerCase()))
     .filter((p) => !settings.minViews || (p.metrics.views ?? Infinity) >= settings.minViews)
     .map((p) => ({ post: p, score: scorePost(p, trusted) }))
     .sort((a, b) => b.score - a.score)
-    .slice(0, 5)
+    .slice(0, settings.candidatesPerTopic)
     .map(({ post }) => fromXPost(post, "x_search", topic.id));
 }
 
@@ -373,7 +390,12 @@ export async function syncBookmarks(): Promise<RunResult> {
   return logged("bookmarks", null, "X bookmarks", async (r) => {
     const settings = getSettings();
     const topics = enabledTopics();
-    const posts = await fetchNewBookmarks(settings.bookmarksPerSync, (id) => knownIds([`x:${id}`]).size > 0);
+    const posts = await fetchNewBookmarks(
+      settings.bookmarksPerSync,
+      (id) => knownIds([`x:${id}`]).size > 0,
+      (message) => r.warnings.push(message),
+    );
+    if (!posts.length && !r.warnings.length) r.warnings.push("No new bookmarks since the last import");
     r.read = posts.length;
     r.candidates = posts.length;
     r.saved = await importCuratedPosts(posts, topics, settings);
@@ -432,27 +454,37 @@ export async function findNews(topicId?: number): Promise<RunResult[]> {
         }
 
         if (settings.xSearchEnabled && !xConfigured()) {
-          r.warnings.push("Paid X search is on, but X_BEARER_TOKEN is not set");
+          r.warnings.push("X search is on, but X_BEARER_TOKEN is not set");
         } else if (settings.xSearchEnabled) {
+          candidates.push(...(await xSearchCandidates(topic, settings, (m) => r.warnings.push(m))));
           try {
-            candidates.push(...(await xSearchCandidates(topic, settings)));
+            const stories = await searchXNews(topic.name, 5, settings.maxAgeHours);
+            candidates.push(...stories.map((s) => fromNews(s, "x_news", topic.id)));
           } catch (e) {
-            r.warnings.push(`X search: ${e instanceof Error ? e.message : e}`);
+            r.warnings.push(`X News: ${e instanceof Error ? e.message : e}`);
           }
         }
         r.read = candidates.length;
 
-        // De-duplicate, drop known / old / blocked, newest first
+        // De-duplicate, drop known / old / blocked
         const unique = [...new Map(candidates.map((c) => [c.sourceId, c])).values()];
         const known = knownIds(unique.map((c) => c.sourceId));
         const minDate = Date.now() - settings.maxAgeHours * 3600_000;
         const blocklist = lines(settings.blocklist);
-        const fresh = unique
+        const usable = unique
           .filter((c) => !known.has(c.sourceId))
           .filter((c) => !c.postedAt || c.postedAt.getTime() >= minDate)
-          .filter((c) => !isBlocked(c, blocklist))
-          .sort((a, b) => (b.postedAt?.getTime() ?? 0) - (a.postedAt?.getTime() ?? 0))
-          .slice(0, settings.candidatesPerTopic);
+          .filter((c) => !isBlocked(c, blocklist));
+        // X posts arrive sorted by popularity, news newest first: alternate so both get a share
+        const xPosts = usable.filter((c) => c.source === "x_search");
+        const news = usable
+          .filter((c) => c.source !== "x_search")
+          .sort((a, b) => (b.postedAt?.getTime() ?? 0) - (a.postedAt?.getTime() ?? 0));
+        const fresh: Candidate[] = [];
+        while (fresh.length < settings.candidatesPerTopic && (xPosts.length || news.length)) {
+          if (xPosts.length) fresh.push(xPosts.shift()!);
+          if (news.length && fresh.length < settings.candidatesPerTopic) fresh.push(news.shift()!);
+        }
         r.candidates = fresh.length;
         if (!fresh.length) return;
 

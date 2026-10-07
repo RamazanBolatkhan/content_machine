@@ -5,7 +5,7 @@ import { MediaGrid } from "@/components/MediaGrid";
 import { CollectButtons } from "@/components/CollectButtons";
 import { SourceBadge } from "@/components/SourceBadge";
 import { StatusButtons } from "@/components/StatusButtons";
-import { enabledLangs, langInfo } from "@/lib/languages";
+import { enabledLangs, isLangCode, langInfo, type LangCode } from "@/lib/languages";
 import { getSettings, getTopics, listDrafts } from "@/lib/queries";
 import { formatCount, timeAgo } from "@/lib/util";
 import { xAccount } from "@/lib/x/auth";
@@ -31,7 +31,14 @@ export default async function DraftsBoard({ searchParams }: PageProps<"/">) {
   const topics = getTopics();
   const langs = enabledLangs(getSettings());
   const drafts = listDrafts({ status, topicId });
-  const href = (s: DraftStatus, t?: number) => `/?status=${s}${t ? `&topic=${t}` : ""}`;
+  // Which text the cards show: the original post, or one of the languages
+  const view: LangCode | "original" = isLangCode(sp.lang) && langs.includes(sp.lang) ? sp.lang : "original";
+  const href = (s: DraftStatus, t?: number, v: LangCode | "original" = view) => {
+    const q = new URLSearchParams({ status: s });
+    if (t) q.set("topic", String(t));
+    if (v !== "original") q.set("lang", v);
+    return `/?${q}`;
+  };
 
   return (
     <div className="space-y-6">
@@ -39,7 +46,8 @@ export default async function DraftsBoard({ searchParams }: PageProps<"/">) {
         <div>
           <h1 className="text-2xl font-semibold">Drafts</h1>
           <p className="text-sm text-zinc-500">
-            Your X bookmarks and fresh AI news, written in {langs.map((c) => langInfo(c).flag).join(" ")}. Review, edit, then post yourself.
+            Popular X posts and fresh AI news, written in {langs.map((c) => langInfo(c).flag).join(" ")}. Review, edit, then post
+            yourself.
           </p>
         </div>
         <CollectButtons
@@ -69,12 +77,31 @@ export default async function DraftsBoard({ searchParams }: PageProps<"/">) {
         ))}
       </div>
 
+      <div className="flex flex-wrap items-center gap-1.5 text-sm">
+        <span className="mr-1 text-zinc-500">Show cards in:</span>
+        <Link
+          href={href(status, topicId, "original")}
+          className={`rounded-full px-3 py-1 ${view === "original" ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900" : "bg-zinc-200 dark:bg-zinc-800"}`}
+        >
+          📄 Original
+        </Link>
+        {langs.map((c) => (
+          <Link
+            key={c}
+            href={href(status, topicId, c)}
+            className={`rounded-full px-3 py-1 ${view === c ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900" : "bg-zinc-200 dark:bg-zinc-800"}`}
+          >
+            {langInfo(c).flag} {langInfo(c).native}
+          </Link>
+        ))}
+      </div>
+
       {topics.length === 0 ? (
         <div className="card p-8 text-center text-zinc-500">
           No topics yet. <Link href="/settings" className="underline">Add your first topic in Settings</Link>.
         </div>
       ) : drafts.length === 0 ? (
-        <div className="card p-8 text-center text-zinc-500">Nothing here. Bookmark posts on X and press “Import bookmarks”, or press “Find news”.</div>
+        <div className="card p-8 text-center text-zinc-500">Nothing here yet. Press “Find posts &amp; news”.</div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
           {drafts.map((d) => (
@@ -95,8 +122,7 @@ export default async function DraftsBoard({ searchParams }: PageProps<"/">) {
                 </span>
               </div>
 
-              <p className="line-clamp-3 text-sm text-zinc-500">{d.originalText}</p>
-              <DraftPreview texts={d.texts} langs={langs} />
+              <CardText original={d.originalText} texts={d.texts} langs={langs} view={view} />
               <MediaGrid media={d.media} small />
               {d.aiReason && <p className="text-xs text-zinc-500 italic">🤖 {d.aiReason}</p>}
 
@@ -114,15 +140,32 @@ export default async function DraftsBoard({ searchParams }: PageProps<"/">) {
   );
 }
 
-function DraftPreview({ texts, langs }: { texts: Record<string, string>; langs: ReturnType<typeof enabledLangs> }) {
-  const first = langs.find((c) => texts[c]);
+function CardText({
+  original,
+  texts,
+  langs,
+  view,
+}: {
+  original: string;
+  texts: Record<string, string>;
+  langs: LangCode[];
+  view: LangCode | "original";
+}) {
   return (
     <div className="space-y-2">
-      {first && (
-        <p className="line-clamp-6 whitespace-pre-wrap" lang={first}>
-          <span className="mr-1">{langInfo(first).flag}</span>
-          {texts[first]}
-        </p>
+      {view === "original" ? (
+        <p className="line-clamp-8 whitespace-pre-wrap">{original}</p>
+      ) : (
+        <>
+          {texts[view] ? (
+            <p className="line-clamp-8 whitespace-pre-wrap" lang={view}>
+              {texts[view]}
+            </p>
+          ) : (
+            <p className="text-sm text-zinc-500 italic">Not written in {langInfo(view).name} yet. Open the editor to write it.</p>
+          )}
+          <p className="line-clamp-2 text-sm text-zinc-500">📄 {original}</p>
+        </>
       )}
       <div className="flex flex-wrap gap-1 text-xs">
         {langs.map((c) => (

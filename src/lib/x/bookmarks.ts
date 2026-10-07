@@ -5,10 +5,15 @@ import { parseV2Posts, POST_FIELDS, type V2Payload, type XPost } from "./parse";
  * Newest bookmarks first, stopping at the first one we already know.
  * Billed as "owned reads" (~$0.001 per post), so `limit` caps the cost per sync.
  */
-export async function fetchNewBookmarks(limit: number, isKnown: (postId: string) => boolean): Promise<XPost[]> {
+export async function fetchNewBookmarks(
+  limit: number,
+  isKnown: (postId: string) => boolean,
+  warn: (message: string) => void = () => {},
+): Promise<XPost[]> {
   const { accessToken, userId } = await getXSession();
   const found: XPost[] = [];
   let paginationToken: string | undefined;
+  let firstPage = true;
 
   while (found.length < limit) {
     const url = new URL(`https://api.x.com/2/users/${userId}/bookmarks`);
@@ -20,7 +25,14 @@ export async function fetchNewBookmarks(limit: number, isKnown: (postId: string)
     const body = (await res.json().catch(() => ({}))) as V2Payload & { meta?: { next_token?: string } };
     if (!res.ok) throw new Error(`X bookmarks ${res.status}: ${JSON.stringify(body).slice(0, 300)}`);
 
-    for (const post of parseV2Posts(body)) {
+    const posts = parseV2Posts(body);
+    // X can answer 200 with no posts, e.g. only "errors" or result_count 0: show why
+    if (firstPage && !posts.length) {
+      warn(`X returned no bookmarks (user ${userId}): ${JSON.stringify(body).slice(0, 400)}`);
+    }
+    firstPage = false;
+
+    for (const post of posts) {
       if (isKnown(post.id)) return found; // everything older was imported before
       found.push(post);
     }

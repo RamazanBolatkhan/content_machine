@@ -15,11 +15,8 @@ if (process.env.X_MODE !== "direct") {
   const { tools } = await client.listTools();
   await client.close();
   console.log(`Server offers ${tools.length} tools.`);
-  for (const name of toolAllowlist()) {
-    const tool = tools.find((t) => t.name === name);
-    console.log(tool ? `  ✓ ${name}` : `  ✗ ${name} (not found!)`);
-    if (tool && process.argv.includes("--schema")) console.log(JSON.stringify(tool.inputSchema, null, 2));
-  }
+  const allowed = toolAllowlist().filter((name) => tools.some((t) => t.name === name));
+  console.log(`Read-only tools available to the app: ${allowed.join(", ") || "none!"}`);
 }
 
 console.log(`\nSearching recent posts for: ${query} (mode: ${process.env.X_MODE ?? "mcp"})`);

@@ -3,6 +3,7 @@ import type { Draft } from "@/db/schema";
 const LABEL: Record<Draft["source"], string> = {
   x_bookmark: "🔖 X bookmark",
   x_search: "🔎 X search",
+  x_news: "📈 X News",
   rss: "📰 RSS",
   web: "🌐 Web",
 };

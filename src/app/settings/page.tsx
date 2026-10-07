@@ -40,7 +40,18 @@ function TopicForm({ topic }: { topic?: Topic }) {
       <div>
         <label className="label">Feeds only about this topic (RSS / Atom)</label>
         <textarea name="feeds" className="input min-h-28 font-mono text-xs" defaultValue={topic?.feeds} placeholder={FEED_EXAMPLES} />
-        <input type="hidden" name="trustedAccounts" value={topic?.trustedAccounts ?? ""} />
+      </div>
+      <div className="md:col-span-3">
+        <label className="label">X accounts to watch (one per line, used by X search)</label>
+        <textarea
+          name="trustedAccounts"
+          className="input min-h-16 font-mono text-xs"
+          defaultValue={topic?.trustedAccounts}
+          placeholder={"OpenAI\nsama\nOpenAIDevs"}
+        />
+        <p className="mt-1 text-xs text-zinc-500">
+          Their posts are almost always popular. Keyword search alone mostly finds posts with few likes.
+        </p>
       </div>
       <div className="flex flex-col justify-end gap-2">
         <button className="btn btn-primary">{topic ? "Save" : "Add topic"}</button>
@@ -138,8 +149,8 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
               <Check
                 name="xSearchEnabled"
                 checked={s.xSearchEnabled}
-                label="🔎 Paid X search"
-                hint={`~$0.005 per post read. Needs X_BEARER_TOKEN${xConfigured() ? "" : " (not set)"}.`}
+                label="🔎 X post search"
+                hint={`Posts from your accounts to watch, keyword search (min likes) and X News stories. ~$0.005 per post read. Needs X_BEARER_TOKEN${xConfigured() ? " ✓" : " (not set)"}.`}
               />
             </div>
             <div className="space-y-3">
@@ -208,7 +219,7 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
         </section>
 
         <details className="space-y-3">
-          <summary className="cursor-pointer text-sm text-zinc-500">Paid X search settings</summary>
+          <summary className="cursor-pointer text-sm text-zinc-500">X post search settings</summary>
           <div className="card mt-3 grid gap-4 p-4 md:grid-cols-4">
             <div>
               <label className="label">Min likes</label>

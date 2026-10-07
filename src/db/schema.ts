@@ -77,7 +77,7 @@ export type PostMetrics = {
 export const DRAFT_STATUSES = ["new", "approved", "rejected", "posted"] as const;
 export type DraftStatus = (typeof DRAFT_STATUSES)[number];
 
-export const SOURCE_TYPES = ["x_bookmark", "x_search", "rss", "web"] as const;
+export const SOURCE_TYPES = ["x_bookmark", "x_search", "x_news", "rss", "web"] as const;
 export type SourceType = (typeof SOURCE_TYPES)[number];
 
 export const drafts = sqliteTable("drafts", {

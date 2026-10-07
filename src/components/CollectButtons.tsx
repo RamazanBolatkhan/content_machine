@@ -39,7 +39,7 @@ export function CollectButtons({
             ))}
           </select>
           <button className="btn btn-primary" disabled={pending || topics.length === 0}>
-            📰 Find news
+            🔎 Find posts & news
           </button>
         </form>
       </div>
