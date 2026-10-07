@@ -1,18 +1,30 @@
 "use client";
 
-import { Bookmark, CircleAlert, Info, LoaderCircle, Search } from "lucide-react";
+import { Bookmark, CircleAlert, Info, LoaderCircle, Search, Star } from "lucide-react";
 import Link from "next/link";
-import { useActionState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { collectAction, type CollectState } from "@/app/actions";
 
 export function CollectButtons({
   topics,
   xConnected,
+  hasTopPosts,
 }: {
   topics: { id: number; name: string }[];
   xConnected: boolean;
+  hasTopPosts: boolean;
 }) {
   const [state, action, pending] = useActionState<CollectState, FormData>(collectAction, null);
+  const [seconds, setSeconds] = useState(0);
+  useEffect(() => {
+    if (!pending) return;
+    const started = Date.now();
+    const timer = setInterval(() => setSeconds(Math.round((Date.now() - started) / 1000)), 1000);
+    return () => {
+      clearInterval(timer);
+      setSeconds(0);
+    };
+  }, [pending]);
 
   return (
     <div className="flex w-full flex-col gap-4 md:w-auto md:items-end">
@@ -25,8 +37,28 @@ export function CollectButtons({
             </button>
           </form>
         ) : (
-          <Link href="/settings#connections" className="btn btn-secondary" title="Connect your X account to import bookmarks">
+          <Link
+            href="/settings#connections"
+            className="btn btn-secondary"
+            title="Connect your X account to import bookmarks"
+          >
             <Bookmark size={16} aria-hidden /> Connect X
+          </Link>
+        )}
+        {hasTopPosts ? (
+          <form action={action}>
+            <input type="hidden" name="kind" value="similar" />
+            <button
+              className="btn btn-secondary"
+              disabled={pending}
+              title="Search only for items like your top Threads posts"
+            >
+              <Star size={16} aria-hidden /> Find like my top posts
+            </button>
+          </form>
+        ) : (
+          <Link href="/settings#top-posts" className="btn btn-secondary" title="Add your best Threads posts first">
+            <Star size={16} aria-hidden /> Add top posts
           </Link>
         )}
         <form action={action} className="flex flex-wrap items-center gap-2">
@@ -34,7 +66,13 @@ export function CollectButtons({
           <label className="sr-only" htmlFor="collect-topic">
             Topic to search
           </label>
-          <select id="collect-topic" name="topicId" className="input w-auto rounded-full" style={{ minHeight: 40 }} disabled={pending}>
+          <select
+            id="collect-topic"
+            name="topicId"
+            className="input w-auto rounded-full"
+            style={{ minHeight: 40 }}
+            disabled={pending}
+          >
             <option value="">Search all topics</option>
             {topics.map((t) => (
               <option key={t.id} value={t.id}>
@@ -43,7 +81,11 @@ export function CollectButtons({
             ))}
           </select>
           <button className="btn btn-primary" disabled={pending || topics.length === 0}>
-            {pending ? <LoaderCircle size={16} className="animate-spin" aria-hidden /> : <Search size={16} aria-hidden />}
+            {pending ? (
+              <LoaderCircle size={16} className="animate-spin" aria-hidden />
+            ) : (
+              <Search size={16} aria-hidden />
+            )}
             Find posts &amp; news
           </button>
         </form>
@@ -52,7 +94,8 @@ export function CollectButtons({
       {pending && (
         <p className="t-small flex items-center gap-2 text-muted" role="status">
           <LoaderCircle size={16} className="animate-spin" aria-hidden />
-          Searching, picking and writing in every language. About 1–3 min per topic.
+          Searching and scoring… {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, "0")} (usually 1–3 min per
+          topic). Keep this tab open.
         </p>
       )}
 

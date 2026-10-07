@@ -125,7 +125,7 @@ export const draftVersions = sqliteTable("draft_versions", {
   createdAt: createdAt(),
 });
 
-export const RUN_KINDS = ["bookmarks", "news"] as const;
+export const RUN_KINDS = ["bookmarks", "news", "similar"] as const;
 
 export const scoutRuns = sqliteTable("scout_runs", {
   id: integer("id").primaryKey({ autoIncrement: true }),

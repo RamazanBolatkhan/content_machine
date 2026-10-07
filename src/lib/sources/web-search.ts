@@ -17,7 +17,25 @@ const resultSchema = z.object({
 });
 
 /** Ask Claude (with web search) for the latest news about a topic. */
-export async function searchTopicNews(topic: Topic, sinceHours: number, maxItems: number): Promise<NewsItem[]> {
+export function searchTopicNews(topic: Topic, sinceHours: number, maxItems: number): Promise<NewsItem[]> {
+  return searchWebNews(
+    `about "${topic.name}"`,
+    [
+      lines(topic.keywords).length ? `Related names / search terms: ${lines(topic.keywords).join(", ")}.` : "",
+      topic.description.trim() ? `The owner is looking for: ${topic.description.trim()}` : "",
+    ],
+    sinceHours,
+    maxItems,
+  );
+}
+
+/** Ask Claude (with web search) for recent stories on any subject. */
+export async function searchWebNews(
+  subject: string,
+  hints: string[],
+  sinceHours: number,
+  maxItems: number,
+): Promise<NewsItem[]> {
   const days = Math.max(1, Math.round(sinceHours / 24));
   const today = new Date().toISOString().slice(0, 10);
   const { items } = await aiObject(resultSchema, {
@@ -28,10 +46,10 @@ export async function searchTopicNews(topic: Topic, sinceHours: number, maxItems
       "Each item must be a separate news story with its own direct URL.",
     ].join("\n"),
     prompt: [
-      `Today is ${today}. Find up to ${maxItems} of the most important news stories from the last ${days} day(s) about "${topic.name}".`,
-      lines(topic.keywords).length ? `Related names / search terms: ${lines(topic.keywords).join(", ")}.` : "",
-      topic.description.trim() ? `The owner is looking for: ${topic.description.trim()}` : "",
-      "Only include stories published within that period. If there is no real news, return an empty list.",
+      `Today is ${today}. Find up to ${maxItems} of the most important or interesting stories from the last ${days} day(s) ${subject}.`,
+      ...hints,
+      `Search several times with different wordings and aim to return close to ${maxItems} items, newest first.`,
+      "Only include stories from roughly that period (skip anything clearly older). If there is really nothing, return an empty list.",
     ]
       .filter(Boolean)
       .join("\n"),

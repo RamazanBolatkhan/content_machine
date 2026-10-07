@@ -203,6 +203,8 @@ In **Settings → Top Threads posts**, paste links to your best-performing Threa
 
 When scoring new items, Claude ranks those that would make a similar post higher and marks them **★ Like your top posts** on the board. No extra X searches, so no extra cost.
 
+**★ Find like my top posts** (Drafts board) is a search mode that uses **only** your top posts. Claude turns them into a few English search themes, the app searches X (if X search is on, about $0.10 per theme) and the web (free) over the last two weeks, and keeps only items that would make a similar post.
+
 **More recipes:** any subreddit `https://www.reddit.com/r/<NAME>/top/.rss?t=day` · any YouTube channel `https://www.youtube.com/feeds/videos.xml?channel_id=<ID>` · most blogs `https://<site>/feed`
 
 ---

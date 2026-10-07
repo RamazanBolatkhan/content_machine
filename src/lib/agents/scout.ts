@@ -1,15 +1,15 @@
 import { z } from "zod";
 import { desc, eq, gte, inArray } from "drizzle-orm";
 import { db, schema } from "@/db";
-import type { Topic, MediaItem, PostMetrics, Settings, SourceType } from "@/db/schema";
+import { RUN_KINDS, type Topic, type MediaItem, type PostMetrics, type Settings, type SourceType } from "@/db/schema";
 import { aiObject } from "@/lib/ai";
 import { enabledLangs } from "@/lib/languages";
-import { referenceBlock } from "./reference";
+import { referenceBlock, similarSearchThemes } from "./reference";
 import { writePosts } from "./writer";
 import { downloadMedia } from "@/lib/media";
 import { fetchFeed, fetchOgImage } from "@/lib/sources/rss";
 import type { NewsItem } from "@/lib/sources/types";
-import { searchTopicNews } from "@/lib/sources/web-search";
+import { searchTopicNews, searchWebNews } from "@/lib/sources/web-search";
 import { getSettings } from "@/lib/queries";
 import { lines } from "@/lib/util";
 import { fetchNewBookmarks } from "@/lib/x/bookmarks";
@@ -70,7 +70,7 @@ export function normalizeUrl(raw: string): string {
   }
 }
 
-function fromNews(item: NewsItem, source: SourceType, topicId: number): Candidate {
+function fromNews(item: NewsItem, source: SourceType, topicId: number | null): Candidate {
   return {
     sourceId: `url:${normalizeUrl(item.url)}`,
     source,
@@ -215,7 +215,10 @@ function recentStories() {
  * curated = the owner picked these (bookmarks): always keep, AI only finds the topic.
  * otherwise the AI decides what is worth posting.
  */
-async function judge(candidates: Candidate[], opts: { curated: boolean; topics: Topic[]; settings: Settings }) {
+async function judge(
+  candidates: Candidate[],
+  opts: { curated: boolean; topics: Topic[]; settings: Settings; similarOnly?: boolean },
+) {
   const recent = recentStories();
   const topPosts = referenceBlock();
   const results: { candidate: Candidate; j: Judgement }[] = [];
@@ -228,14 +231,16 @@ async function judge(candidates: Candidate[], opts: { curated: boolean; topics: 
       instructions: [
         "You are the editor of a multilingual social media account about the owner's topics (listed below with their keywords).",
         "Pick the matching topic id for each item (or null if none fits) and rate how interesting it is for people who follow that topic.",
-        opts.curated
-          ? "The owner hand-picked these X posts (bookmarks). Set keep=true for all of them."
-          : [
-              "Decide for each item if it is worth posting for followers of its topic: real news, launches and announcements, new research or data, notable updates, expert insights, practical advice from credible people, or genuinely useful/surprising content.",
-              "Reject: spam, ads, giveaways, SEO listicles, empty engagement bait, minor drama, items that match a keyword by accident but are not really about the topic, old news.",
-              "If an item covers a story in the 'already have' list, reuse that storyKey and set keep=false.",
-              "If several items cover the same new story, give them the same storyKey; the app keeps the best.",
-            ].join("\n"),
+        opts.similarOnly
+          ? "This search is ONLY for items like the owner's best-performing posts (below). Set keep=true only for real, fresh items that would make a similar post (same kind of topic, angle or hook); keep=false for everything else, however good. Reuse an existing storyKey and set keep=false for stories already covered."
+          : opts.curated
+            ? "The owner hand-picked these X posts (bookmarks). Set keep=true for all of them."
+            : [
+                "Decide for each item if it is worth posting for followers of its topic: real news, launches and announcements, new research or data, notable updates, expert insights, practical advice from credible people, or genuinely useful/surprising content.",
+                "Reject: spam, ads, giveaways, SEO listicles, empty engagement bait, minor drama, items that match a keyword by accident but are not really about the topic, old news.",
+                "If an item covers a story in the 'already have' list, reuse that storyKey and set keep=false.",
+                "If several items cover the same new story, give them the same storyKey; the app keeps the best.",
+              ].join("\n"),
         topPosts ? `\n${topPosts}` : "Set matchesTop=false (no top posts given).",
       ].join("\n"),
       prompt: [
@@ -396,7 +401,7 @@ async function saveDrafts(
 // ---------- run logging ----------
 
 async function logged(
-  kind: "bookmarks" | "news",
+  kind: (typeof RUN_KINDS)[number],
   topicId: number | null,
   label: string,
   fn: (r: RunResult) => Promise<void>,
@@ -547,4 +552,77 @@ export async function findNews(topicId?: number): Promise<RunResult[]> {
     );
   }
   return results;
+}
+
+/**
+ * "Find like my top posts": search only with themes derived from the owner's top Threads posts
+ * (X search when enabled + Claude web search), and keep only items that would make a similar post.
+ */
+export async function findLikeTopPosts(): Promise<RunResult> {
+  return logged("similar", null, "Like my top posts", async (r) => {
+    const settings = getSettings();
+    const topics = enabledTopics();
+    const themes = await similarSearchThemes(4);
+    const candidates: Candidate[] = [];
+    const useX = settings.xSearchEnabled && xConfigured();
+
+    // Similar stories don't have to be breaking news: look back two weeks
+    const sinceHours = Math.max(settings.maxAgeHours, 336);
+
+    // Web searches run in parallel (Claude); X searches one after another (X allows ~1/s)
+    const web = Promise.all(
+      themes.map((theme) =>
+        searchWebNews(`matching this description: "${theme.webSubject.replace(/\.$/, "")}"`, [], sinceHours, 10).catch(
+          (e) => {
+            r.warnings.push(`Web search "${theme.label}": ${e instanceof Error ? e.message : e}`);
+            return [];
+          },
+        ),
+      ),
+    );
+    if (useX) {
+      for (const theme of themes) {
+        if (!theme.xKeywords.length) continue;
+        const terms = theme.xKeywords.slice(0, 6).map((k) => (/\s/.test(k) ? `"${k.replace(/"/g, "")}"` : k));
+        const query = [
+          `(${terms.join(" OR ")})`,
+          "-is:retweet",
+          "-is:reply",
+          settings.searchLang ? `lang:${settings.searchLang}` : "",
+        ]
+          .filter(Boolean)
+          .join(" ");
+        try {
+          const posts = await searchRecentPosts({ query, maxResults: 20, sinceHours });
+          candidates.push(
+            ...posts
+              .filter((p) => !p.isReply && p.metrics.likes >= settings.minLikes)
+              .map((p) => fromXPost(p, "x_search", null)),
+          );
+        } catch (e) {
+          r.warnings.push(`X search "${theme.label}": ${e instanceof Error ? e.message : e}`);
+        }
+      }
+    }
+    for (const items of await web) candidates.push(...items.map((i) => fromNews(i, "web", null)));
+    if (!useX) r.warnings.push("X search is off or has no token: searched the web only");
+    r.read = candidates.length;
+
+    const unique = [...new Map(candidates.map((c) => [c.sourceId, c])).values()];
+    const known = knownIds(unique.map((c) => c.sourceId));
+    const minDate = Date.now() - sinceHours * 3600_000;
+    const blocklist = lines(settings.blocklist);
+    const fresh = unique
+      .filter((c) => !known.has(c.sourceId))
+      .filter((c) => !c.postedAt || c.postedAt.getTime() >= minDate)
+      .filter((c) => !isBlocked(c, blocklist))
+      .slice(0, settings.candidatesPerTopic);
+    r.candidates = fresh.length;
+    if (!fresh.length) return;
+
+    const judged = await judge(fresh, { curated: false, topics, settings, similarOnly: true });
+    // Everything kept by this search is, by definition, like the top posts
+    for (const item of judged) if (item.j.keep) item.j.matchesTop = true;
+    r.saved = await saveDrafts(judged, { curated: false, topics, settings });
+  });
 }

@@ -295,7 +295,7 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
                 <tr key={r.id}>
                   <td className="whitespace-nowrap text-muted">{r.startedAt.toLocaleString()}</td>
                   <td className="font-semibold whitespace-nowrap">
-                    {r.kind === "bookmarks" ? "Bookmarks" : r.topicName}
+                    {r.kind === "bookmarks" ? "Bookmarks" : r.kind === "similar" ? "Like my top posts" : r.topicName}
                   </td>
                   <td>{r.itemsRead}</td>
                   <td>{r.candidates}</td>

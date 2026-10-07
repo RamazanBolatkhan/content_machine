@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { DRAFT_STATUSES, type DraftStatus } from "@/db/schema";
-import { findNews, syncBookmarks, type RunResult } from "@/lib/agents/scout";
+import { findLikeTopPosts, findNews, syncBookmarks, type RunResult } from "@/lib/agents/scout";
 import { writeMissingLanguages } from "@/lib/agents/editor";
 import {
   addReferencePosts,
@@ -20,10 +20,13 @@ import { disconnectX } from "@/lib/x/auth";
 export type CollectState = { results: RunResult[]; at: number } | null;
 
 export async function collectAction(_prev: CollectState, formData: FormData): Promise<CollectState> {
+  const kind = formData.get("kind");
   const results =
-    formData.get("kind") === "bookmarks"
+    kind === "bookmarks"
       ? [await syncBookmarks()]
-      : await findNews(Number(formData.get("topicId")) || undefined);
+      : kind === "similar"
+        ? [await findLikeTopPosts()]
+        : await findNews(Number(formData.get("topicId")) || undefined);
   revalidatePath("/");
   revalidatePath("/settings");
   return { results, at: Date.now() };

@@ -10,6 +10,7 @@ import { WriteButton } from "@/components/WriteButton";
 import { enabledLangs, isLangCode, langInfo, type LangCode } from "@/lib/languages";
 import { getSettings, getTopics, listDrafts } from "@/lib/queries";
 import { formatCount, timeAgo } from "@/lib/util";
+import { hasReferencePosts } from "@/lib/agents/reference";
 import { xAccount } from "@/lib/x/auth";
 
 // Reads the local database on every request
@@ -57,6 +58,7 @@ export default async function DraftsBoard({ searchParams }: PageProps<"/">) {
         <CollectButtons
           topics={topics.filter((t) => t.enabled).map((t) => ({ id: t.id, name: t.name }))}
           xConnected={xAccount() !== null}
+          hasTopPosts={hasReferencePosts()}
         />
       </div>
 

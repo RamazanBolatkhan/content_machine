@@ -123,6 +123,47 @@ export async function deleteReferencePost(id: number) {
   await rebuildReferenceProfile();
 }
 
+export function hasReferencePosts(): boolean {
+  return db
+    .select()
+    .from(schema.referencePosts)
+    .all()
+    .some((p) => p.gistEn);
+}
+
+const themesSchema = z.object({
+  themes: z.array(
+    z.object({
+      label: z.string().describe("Short English name of the theme"),
+      xKeywords: z
+        .array(z.string())
+        .describe("3–6 short English search terms people use in X posts about this theme (no hashtags, no quotes)"),
+      webSubject: z.string().describe("One English sentence describing stories to look for"),
+    }),
+  ),
+});
+
+/** English search themes that would surface items like the owner's top posts. */
+export async function similarSearchThemes(max: number) {
+  const settings = db.select().from(schema.settings).where(eq(schema.settings.id, 1)).get();
+  const posts = db
+    .select()
+    .from(schema.referencePosts)
+    .all()
+    .filter((p) => p.gistEn)
+    .slice(0, 30);
+  if (!posts.length) throw new Error("Add your top Threads posts in Settings first");
+  const { themes } = await aiObject(themesSchema, {
+    instructions: `From a creator's best-performing posts, derive up to ${max} distinct English search themes that would find fresh news or posts they could turn into similar content. Prefer the themes that appear most often.`,
+    prompt: [
+      settings?.referenceProfile ? `Profile:\n${settings.referenceProfile}\n` : "",
+      "Top posts:",
+      ...posts.map((p) => `- ${p.gistEn} (${p.themes})`),
+    ].join("\n"),
+  });
+  return themes.slice(0, max);
+}
+
 /** Block added to the judge's instructions; empty when there are no top posts. */
 export function referenceBlock(): string {
   const settings = db.select().from(schema.settings).where(eq(schema.settings.id, 1)).get();

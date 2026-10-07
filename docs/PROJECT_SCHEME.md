@@ -330,3 +330,10 @@ Each AI or hand edit creates a new version, so changes can be undone.
 - `src/lib/agents/reference.ts`: Claude gives each post's language, an English gist and why it worked, then builds a ≤120-word profile. `referenceBlock()` is added to the judge's instructions, and the judge returns `matchesTop`.
 - UI: Settings section "Top Threads posts" (`TopPostsSection`), and a "★ Like your top posts" badge on board cards.
 - **Verified:** read a real post (text + likes). A pasted Russian post → lang ru, English gist and themes. With the profile, the Psychology scoring marked 3 of 27 items as similar, with fitting reasons.
+
+## 18. "Find like my top posts" mode (2026-10-07)
+
+- `findLikeTopPosts()` (run kind `similar`): `similarSearchThemes(4)` (Claude) turns the reference posts into English themes, each with X keywords and a web description. Web searches run in parallel; X searches one after another (only when X search is on; min likes applies). The window is at least 14 days. The judge runs with `similarOnly` and keeps only items that would make a similar post; kept items get `matchesTop`.
+- `searchWebNews(subject, hints, …)` is the generic web search (topic search reuses it). The prompt now asks Claude to search several times and aim for a full list, because it used to return 0–1 items when unsure of dates.
+- Board: "Find like my top posts" button (or "Add top posts" when there are none), plus an elapsed-time counter while a search runs.
+- **Verified (web only, DB copy):** 2 Russian sample posts → 4 themes (doomscrolling, loneliness, small social connections, digital wellbeing) → 9 found → 4 kept, all on-theme, in 120 s.
