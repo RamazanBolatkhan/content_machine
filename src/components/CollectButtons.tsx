@@ -45,8 +45,16 @@ export function CollectButtons({
             <Star size={16} aria-hidden /> Find like my top posts
           </button>
         ) : (
-          <Link href="/settings#top-posts" className="btn btn-secondary" title="Add your best Threads posts first">
-            <Star size={16} aria-hidden /> Add top posts
+          <Link
+            href="/settings#top-posts"
+            className="btn btn-secondary flex-col !gap-0 leading-tight"
+            style={{ height: "auto", minHeight: 40, paddingBlock: 6 }}
+            title="Add your best Threads posts first"
+          >
+            <span className="flex items-center gap-2">
+              <Star size={16} aria-hidden /> Find like my top posts
+            </span>
+            <span className="t-caption font-normal text-muted">Add your top Threads posts first →</span>
           </Link>
         )}
         <div className="flex flex-wrap items-center gap-2">
