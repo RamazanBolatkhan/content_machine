@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { connection } from "next/server";
+import { ArrowRight, Eye, Heart, Inbox, Sparkles } from "lucide-react";
 import { DRAFT_STATUSES, type DraftStatus } from "@/db/schema";
-import { MediaGrid } from "@/components/MediaGrid";
 import { CollectButtons } from "@/components/CollectButtons";
+import { MediaGrid } from "@/components/MediaGrid";
 import { SourceBadge } from "@/components/SourceBadge";
 import { StatusButtons } from "@/components/StatusButtons";
 import { enabledLangs, isLangCode, langInfo, type LangCode } from "@/lib/languages";
@@ -30,7 +31,10 @@ export default async function DraftsBoard({ searchParams }: PageProps<"/">) {
 
   const topics = getTopics();
   const langs = enabledLangs(getSettings());
-  const drafts = listDrafts({ status, topicId });
+  const inTopic = listDrafts({ topicId });
+  const drafts = inTopic.filter((d) => d.status === status);
+  const counts = Object.fromEntries(DRAFT_STATUSES.map((s) => [s, inTopic.filter((d) => d.status === s).length]));
+
   // Which text the cards show: the original post, or one of the languages
   const view: LangCode | "original" = isLangCode(sp.lang) && langs.includes(sp.lang) ? sp.lang : "original";
   const href = (s: DraftStatus, t?: number, v: LangCode | "original" = view) => {
@@ -41,12 +45,12 @@ export default async function DraftsBoard({ searchParams }: PageProps<"/">) {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold">Drafts</h1>
-          <p className="text-sm text-zinc-500">
-            Popular X posts and fresh AI news, written in {langs.map((c) => langInfo(c).flag).join(" ")}. Review, edit, then post
+    <div className="space-y-8">
+      <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
+        <div className="space-y-2">
+          <h1 className="t-h2">Drafts</h1>
+          <p className="t-body max-w-xl text-muted">
+            Popular X posts, your bookmarks and fresh AI news, written in {langs.length} languages. Review, edit, then post
             yourself.
           </p>
         </div>
@@ -56,86 +60,127 @@ export default async function DraftsBoard({ searchParams }: PageProps<"/">) {
         />
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 text-sm">
-        {DRAFT_STATUSES.map((s) => (
-          <Link
-            key={s}
-            href={href(s, topicId)}
-            className={`rounded-full px-3 py-1 ${s === status ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900" : "bg-zinc-200 dark:bg-zinc-800"}`}
-          >
-            {STATUS_LABEL[s]}
+      <div className="card space-y-4 p-4 md:p-6">
+        <FilterRow label="Status">
+          {DRAFT_STATUSES.map((s) => (
+            <Link key={s} href={href(s, topicId)} className={`chip ${s === status ? "chip-selected" : ""}`}>
+              {STATUS_LABEL[s]}
+              <span className="chip-count">{counts[s]}</span>
+            </Link>
+          ))}
+        </FilterRow>
+        {topics.length > 1 && (
+          <FilterRow label="Topic">
+            <Link href={href(status)} className={`chip ${!topicId ? "chip-selected" : ""}`}>
+              All
+            </Link>
+            {topics.map((t) => (
+              <Link key={t.id} href={href(status, t.id)} className={`chip ${topicId === t.id ? "chip-selected" : ""}`}>
+                {t.name}
+              </Link>
+            ))}
+          </FilterRow>
+        )}
+        <FilterRow label="Show in">
+          <Link href={href(status, topicId, "original")} className={`chip ${view === "original" ? "chip-selected" : ""}`}>
+            Original
           </Link>
-        ))}
-        <span className="mx-2 text-zinc-300">|</span>
-        <Link href={href(status)} className={!topicId ? "font-semibold" : "text-zinc-500"}>
-          All topics
-        </Link>
-        {topics.map((t) => (
-          <Link key={t.id} href={href(status, t.id)} className={topicId === t.id ? "font-semibold" : "text-zinc-500"}>
-            {t.name}
-          </Link>
-        ))}
-      </div>
-
-      <div className="flex flex-wrap items-center gap-1.5 text-sm">
-        <span className="mr-1 text-zinc-500">Show cards in:</span>
-        <Link
-          href={href(status, topicId, "original")}
-          className={`rounded-full px-3 py-1 ${view === "original" ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900" : "bg-zinc-200 dark:bg-zinc-800"}`}
-        >
-          📄 Original
-        </Link>
-        {langs.map((c) => (
-          <Link
-            key={c}
-            href={href(status, topicId, c)}
-            className={`rounded-full px-3 py-1 ${view === c ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900" : "bg-zinc-200 dark:bg-zinc-800"}`}
-          >
-            {langInfo(c).flag} {langInfo(c).native}
-          </Link>
-        ))}
+          {langs.map((c) => (
+            <Link key={c} href={href(status, topicId, c)} className={`chip ${view === c ? "chip-selected" : ""}`}>
+              <span className="font-bold">{c.toUpperCase()}</span> {langInfo(c).native}
+            </Link>
+          ))}
+        </FilterRow>
       </div>
 
       {topics.length === 0 ? (
-        <div className="card p-8 text-center text-zinc-500">
-          No topics yet. <Link href="/settings" className="underline">Add your first topic in Settings</Link>.
-        </div>
+        <EmptyState
+          title="No topics yet"
+          text="Add a topic you post about, like OpenAI or AI agents, to start collecting posts."
+          action={
+            <Link href="/settings" className="btn btn-primary">
+              Add a topic <ArrowRight size={16} aria-hidden />
+            </Link>
+          }
+        />
       ) : drafts.length === 0 ? (
-        <div className="card p-8 text-center text-zinc-500">Nothing here yet. Press “Find posts &amp; news”.</div>
+        <EmptyState
+          title={`No ${STATUS_LABEL[status].toLowerCase()} drafts`}
+          text={status === "new" ? "Press “Find posts & news” to collect fresh posts." : "Drafts you move here will show up in this list."}
+        />
       ) : (
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid gap-6 md:grid-cols-2">
           {drafts.map((d) => (
-            <article key={d.id} className="card flex flex-col gap-3 p-4">
-              <div className="flex items-center justify-between gap-2 text-xs text-zinc-500">
-                <span className="flex flex-wrap items-center gap-1.5">
-                  {d.topicName && <span className="rounded bg-zinc-100 px-1.5 py-0.5 dark:bg-zinc-800">🤖 {d.topicName}</span>}
+            <article key={d.id} className="card flex flex-col gap-4 p-6">
+              <header className="flex items-start justify-between gap-4">
+                <div className="t-caption flex min-w-0 flex-wrap items-center gap-2">
+                  {d.topicName && <span className="badge">{d.topicName}</span>}
                   <SourceBadge draft={d} />
-                  {d.postedAt && <span>· {timeAgo(d.postedAt)}</span>}
+                  {d.postedAt && <span className="text-muted">{timeAgo(d.postedAt)}</span>}
+                </div>
+                <span className="badge badge-inverse shrink-0" title="AI importance, 1–10">
+                  {d.score}/10
                 </span>
-                <span className="shrink-0">
-                  {d.metrics && (
-                    <>
-                      ❤️ {formatCount(d.metrics.likes)} · 👁 {formatCount(d.metrics.views)} ·{" "}
-                    </>
-                  )}
-                  <b title="AI importance, 1–10">⭐ {d.score}</b>
-                </span>
-              </div>
+              </header>
 
               <CardText original={d.originalText} texts={d.texts} langs={langs} view={view} />
               <MediaGrid media={d.media} small />
-              {d.aiReason && <p className="text-xs text-zinc-500 italic">🤖 {d.aiReason}</p>}
 
-              <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-2">
+              {(d.aiReason || d.metrics) && (
+                <div className="t-small space-y-1 text-muted">
+                  {d.aiReason && (
+                    <p className="flex gap-2">
+                      <Sparkles size={16} className="mt-0.5 shrink-0" aria-hidden />
+                      <span>{d.aiReason}</span>
+                    </p>
+                  )}
+                  {d.metrics && (
+                    <p className="flex items-center gap-4">
+                      <span className="inline-flex items-center gap-1">
+                        <Heart size={14} aria-hidden /> {formatCount(d.metrics.likes)}
+                      </span>
+                      <span className="inline-flex items-center gap-1">
+                        <Eye size={14} aria-hidden /> {formatCount(d.metrics.views)}
+                      </span>
+                    </p>
+                  )}
+                </div>
+              )}
+
+              <footer className="mt-auto flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
                 <StatusButtons draftId={d.id} status={d.status} />
-                <Link href={`/drafts/${d.id}`} className="btn btn-primary">
-                  ✏️ Open editor
+                <Link href={`/drafts/${d.id}`} className="btn btn-primary btn-sm">
+                  Open editor <ArrowRight size={16} aria-hidden />
                 </Link>
-              </div>
+              </footer>
             </article>
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function FilterRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-2 md:flex-row md:items-center md:gap-4">
+      <span className="t-h7 w-20 shrink-0 text-muted">{label}</span>
+      <div className="flex flex-wrap gap-2">{children}</div>
+    </div>
+  );
+}
+
+function EmptyState({ title, text, action }: { title: string; text: string; action?: React.ReactNode }) {
+  return (
+    <div className="card flex flex-col items-center gap-4 px-6 py-16 text-center">
+      <span className="grid size-12 place-items-center rounded-full bg-surface">
+        <Inbox size={24} aria-hidden />
+      </span>
+      <div className="space-y-1">
+        <h2 className="t-h5">{title}</h2>
+        <p className="t-body max-w-md text-muted">{text}</p>
+      </div>
+      {action}
     </div>
   );
 }
@@ -152,29 +197,31 @@ function CardText({
   view: LangCode | "original";
 }) {
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       {view === "original" ? (
-        <p className="line-clamp-8 whitespace-pre-wrap">{original}</p>
+        <p className="t-body line-clamp-8 whitespace-pre-wrap">{original}</p>
       ) : (
         <>
           {texts[view] ? (
-            <p className="line-clamp-8 whitespace-pre-wrap" lang={view}>
+            <p className="t-body line-clamp-8 whitespace-pre-wrap" lang={view}>
               {texts[view]}
             </p>
           ) : (
-            <p className="text-sm text-zinc-500 italic">Not written in {langInfo(view).name} yet. Open the editor to write it.</p>
+            <p className="t-small text-muted italic">Not written in {langInfo(view).name} yet. Open the editor to write it.</p>
           )}
-          <p className="line-clamp-2 text-sm text-zinc-500">📄 {original}</p>
+          <p className="t-small line-clamp-2 text-muted">
+            <span className="font-semibold">Original:</span> {original}
+          </p>
         </>
       )}
-      <div className="flex flex-wrap gap-1 text-xs">
+      <div className="flex flex-wrap gap-1">
         {langs.map((c) => (
           <span
             key={c}
-            title={texts[c] ? `${langInfo(c).name}: written` : `${langInfo(c).name}: missing`}
-            className={`rounded px-1.5 py-0.5 ${texts[c] ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300" : "bg-zinc-100 text-zinc-400 line-through dark:bg-zinc-800"}`}
+            title={texts[c] ? `${langInfo(c).name}: written` : `${langInfo(c).name}: not written yet`}
+            className={`badge ${texts[c] ? "badge-outline" : "badge-missing"}`}
           >
-            {langInfo(c).flag} {c.toUpperCase()}
+            {c.toUpperCase()}
           </span>
         ))}
       </div>

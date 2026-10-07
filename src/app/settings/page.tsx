@@ -1,4 +1,5 @@
 import { connection } from "next/server";
+import { Check, CircleAlert, Info, Plus, Trash2 } from "lucide-react";
 import { deleteTopic, disconnectXAction, saveSettings, saveTopic } from "@/app/actions";
 import type { Topic } from "@/db/schema";
 import { AI_PROVIDER, aiConfigured, aiSetupHint, DEFAULT_STYLE } from "@/lib/ai";
@@ -16,66 +17,14 @@ const FEED_EXAMPLES = [
   "https://www.youtube.com/feeds/videos.xml?channel_id=CHANNEL_ID",
 ].join("\n");
 
-function TopicForm({ topic }: { topic?: Topic }) {
-  return (
-    <form action={saveTopic} className="card grid gap-3 p-4 md:grid-cols-[1fr_1.2fr_1.6fr_auto]">
-      {topic && <input type="hidden" name="id" value={topic.id} />}
-      <div>
-        <label className="label">Topic</label>
-        <input name="name" className="input" defaultValue={topic?.name} placeholder="OpenAI" required />
-        <label className="mt-2 flex items-center gap-2 text-sm">
-          <input type="checkbox" name="enabled" defaultChecked={topic?.enabled ?? true} /> Enabled
-        </label>
-      </div>
-      <div>
-        <label className="label">Keywords (one per line)</label>
-        <textarea
-          name="keywords"
-          className="input min-h-28 font-mono text-xs"
-          defaultValue={topic?.keywords}
-          placeholder={"OpenAI\nChatGPT\nSam Altman"}
-          required
-        />
-      </div>
-      <div>
-        <label className="label">Feeds only about this topic (RSS / Atom)</label>
-        <textarea name="feeds" className="input min-h-28 font-mono text-xs" defaultValue={topic?.feeds} placeholder={FEED_EXAMPLES} />
-      </div>
-      <div className="md:col-span-3">
-        <label className="label">X accounts to watch (one per line, used by X search)</label>
-        <textarea
-          name="trustedAccounts"
-          className="input min-h-16 font-mono text-xs"
-          defaultValue={topic?.trustedAccounts}
-          placeholder={"OpenAI\nsama\nOpenAIDevs"}
-        />
-        <p className="mt-1 text-xs text-zinc-500">
-          Their posts are almost always popular. Keyword search alone mostly finds posts with few likes.
-        </p>
-      </div>
-      <div className="flex flex-col justify-end gap-2">
-        <button className="btn btn-primary">{topic ? "Save" : "Add topic"}</button>
-        {topic && (
-          <button formAction={deleteTopic} className="btn btn-bad">
-            Delete
-          </button>
-        )}
-      </div>
-    </form>
-  );
-}
-
-function Check({ name, label, hint, checked }: { name: string; label: string; hint: string; checked: boolean }) {
-  return (
-    <label className="flex items-start gap-2 text-sm">
-      <input type="checkbox" name={name} defaultChecked={checked} className="mt-1" />
-      <span>
-        {label}
-        <span className="block text-xs text-zinc-500">{hint}</span>
-      </span>
-    </label>
-  );
-}
+const SECTIONS = [
+  { id: "connections", label: "Connections" },
+  { id: "topics", label: "Topics" },
+  { id: "sources", label: "Sources" },
+  { id: "languages", label: "Languages" },
+  { id: "writing", label: "Writing & filters" },
+  { id: "runs", label: "Recent runs" },
+];
 
 export default async function SettingsPage({ searchParams }: PageProps<"/settings">) {
   await connection();
@@ -86,202 +35,417 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
   const account = xAccount();
 
   return (
-    <div className="space-y-10">
-      <section id="connections" className="space-y-3">
-        <h2 className="text-xl font-semibold">Connections</h2>
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="card space-y-2 p-4">
-            <span className="label">AI</span>
+    <div className="space-y-8">
+      <div className="space-y-2">
+        <h1 className="t-h2">Settings</h1>
+        <p className="t-body text-muted">Connections, what to track, where to look and how posts are written.</p>
+      </div>
+
+      <nav aria-label="Settings sections" className="flex flex-wrap gap-2">
+        {SECTIONS.map((x) => (
+          <a key={x.id} href={`#${x.id}`} className="chip">
+            {x.label}
+          </a>
+        ))}
+      </nav>
+
+      {/* ---------- Connections ---------- */}
+      <Section id="connections" title="Connections">
+        <div className="grid gap-6 md:grid-cols-2">
+          <div className="card space-y-3 p-6">
+            <h3 className="t-h6">AI</h3>
             {aiConfigured() ? (
-              <p className="text-sm">
-                ✅ {AI_PROVIDER === "claude-code" ? "Claude Code on your subscription (no API cost)" : "Vercel AI Gateway (paid per token)"}
-              </p>
+              <Status ok>
+                {AI_PROVIDER === "claude-code" ? "Claude Code on your subscription (no API cost)" : "Vercel AI Gateway (paid per token)"}
+              </Status>
             ) : (
-              <p className="text-sm text-rose-600">⚠ {aiSetupHint()}</p>
+              <Status>{aiSetupHint()}</Status>
             )}
           </div>
-          <div className="card space-y-2 p-4">
-            <span className="label">X account (for bookmarks)</span>
-            {sp.x === "connected" && <p className="text-sm text-emerald-600">Connected!</p>}
-            {sp.x_error && <p className="text-sm text-rose-600">⚠ {String(sp.x_error)}</p>}
+
+          <div className="card space-y-3 p-6">
+            <h3 className="t-h6">X account (for bookmarks)</h3>
+            {sp.x === "connected" && <Status ok>Connected</Status>}
+            {sp.x_error && <Status>{String(sp.x_error)}</Status>}
             {account ? (
-              <form action={disconnectXAction} className="flex items-center justify-between gap-2">
-                <p className="text-sm">✅ Connected as <b>@{account.username}</b></p>
-                <button className="btn btn-bad text-xs">Disconnect</button>
+              <form action={disconnectXAction} className="flex flex-wrap items-center justify-between gap-3">
+                <Status ok>
+                  Connected as <span className="font-semibold">@{account.username}</span>
+                </Status>
+                <button className="btn btn-secondary btn-sm">Disconnect</button>
               </form>
             ) : xLoginConfigured() ? (
               <a href="/api/x/login" className="btn btn-primary">
                 Connect X account
               </a>
             ) : (
-              <p className="text-sm text-zinc-500">
-                Set <code>X_CLIENT_ID</code> (and <code>X_CLIENT_SECRET</code> for a “Web App”) in <code>.env.local</code>. In the X
-                console, add the callback URL <code>{redirectUri()}</code>.
+              <p className="t-small text-muted">
+                Set <code>X_CLIENT_ID</code> in <code>.env.local</code>, and add the callback URL <code>{redirectUri()}</code> in
+                the X console.
+              </p>
+            )}
+            <div className="divider" />
+            <h3 className="t-h6">X search</h3>
+            {xConfigured() ? (
+              <Status ok>Bearer Token set</Status>
+            ) : (
+              <p className="t-small text-muted">
+                Set <code>X_BEARER_TOKEN</code> in <code>.env.local</code> to search X posts.
               </p>
             )}
           </div>
         </div>
-      </section>
+      </Section>
 
-      <section className="space-y-3">
-        <h2 className="text-xl font-semibold">Topics to track</h2>
-        <p className="text-sm text-zinc-500">
-          A company, product or theme you post about, e.g. “OpenAI”, “Anthropic &amp; Claude”, “Open-source models”, “AI agents”.
-        </p>
-        {topics.map((t) => (
-          <TopicForm key={t.id} topic={t} />
-        ))}
-        <TopicForm />
-      </section>
+      {/* ---------- Topics ---------- */}
+      <Section
+        id="topics"
+        title="Topics"
+        text="A company, product or theme you post about, e.g. “OpenAI”, “Anthropic & Claude”, “Open-source models”."
+      >
+        <div className="space-y-6">
+          {topics.map((t) => (
+            <TopicForm key={t.id} topic={t} />
+          ))}
+          <TopicForm />
+        </div>
+      </Section>
 
-      <form action={saveSettings} className="space-y-10">
-        <section className="space-y-3">
-          <h2 className="text-xl font-semibold">Sources</h2>
-          <div className="card grid gap-4 p-4 md:grid-cols-3">
-            <div className="space-y-3">
-              <Check name="rssEnabled" checked={s.rssEnabled} label="📰 RSS feeds" hint="Free. Topic feeds + general news feeds below." />
-              <Check
-                name="webSearchEnabled"
-                checked={s.webSearchEnabled}
-                label="🌐 Claude web search"
-                hint="Uses your Claude subscription. ~30 s per topic."
-              />
-              <Check
+      <form action={saveSettings} className="space-y-8">
+        {/* ---------- Sources ---------- */}
+        <Section id="sources" title="Sources">
+          <div className="card space-y-6 p-6">
+            <div className="grid gap-6 md:grid-cols-3">
+              <Toggle
                 name="xSearchEnabled"
                 checked={s.xSearchEnabled}
-                label="🔎 X post search"
-                hint={`Posts from your accounts to watch, keyword search (min likes) and X News stories. ~$0.005 per post read. Needs X_BEARER_TOKEN${xConfigured() ? " ✓" : " (not set)"}.`}
+                label="X post search"
+                hint={`Posts from your accounts to watch, keyword posts above min likes, and X News. About $0.005 per post read.${xConfigured() ? "" : " Needs X_BEARER_TOKEN."}`}
+              />
+              <Toggle name="rssEnabled" checked={s.rssEnabled} label="RSS feeds" hint="Free. Topic feeds and general news feeds below." />
+              <Toggle
+                name="webSearchEnabled"
+                checked={s.webSearchEnabled}
+                label="Claude web search"
+                hint="Uses your Claude subscription. About 30 s per topic."
               />
             </div>
-            <div className="space-y-3">
-              <div>
-                <label className="label">Bookmarks per import (max)</label>
-                <input name="bookmarksPerSync" type="number" className="input" defaultValue={s.bookmarksPerSync} />
-                <p className="mt-1 text-xs text-zinc-500">~$0.001 each. Stops at the first bookmark already imported.</p>
-              </div>
-              <div>
-                <label className="label">Ignore news older than (hours)</label>
-                <input name="maxAgeHours" type="number" className="input" defaultValue={s.maxAgeHours} />
-              </div>
-              <div>
-                <label className="label">Max news items per topic sent to AI</label>
-                <input name="candidatesPerTopic" type="number" className="input" defaultValue={s.candidatesPerTopic} />
-              </div>
-            </div>
-            <div>
-              <label className="label">General AI news feeds (matched to topics by keywords)</label>
-              <textarea
-                name="newsFeeds"
-                className="input min-h-40 font-mono text-xs"
-                defaultValue={s.newsFeeds}
-                placeholder={"https://techcrunch.com/category/artificial-intelligence/feed/\nhttps://www.theverge.com/rss/ai-artificial-intelligence/index.xml\nhttps://hnrss.org/newest?q=AI+OR+LLM&points=100"}
+            <div className="divider" />
+            <div className="grid gap-6 md:grid-cols-3">
+              <Field label="Ignore news older than (hours)" name="maxAgeHours" type="number" value={s.maxAgeHours} />
+              <Field label="Max items per topic sent to AI" name="candidatesPerTopic" type="number" value={s.candidatesPerTopic} />
+              <Field
+                label="Bookmarks per import (max)"
+                name="bookmarksPerSync"
+                type="number"
+                value={s.bookmarksPerSync}
+                hint="About $0.001 each. Stops at the first bookmark already imported."
               />
             </div>
+            <Field
+              label="General AI news feeds"
+              name="newsFeeds"
+              textarea
+              mono
+              value={s.newsFeeds}
+              placeholder={
+                "https://techcrunch.com/category/artificial-intelligence/feed/\nhttps://www.theverge.com/rss/ai-artificial-intelligence/index.xml\nhttps://hnrss.org/newest?q=AI+OR+LLM&points=100"
+              }
+              hint="One per line. Articles are matched to your topics by keyword."
+            />
+            <details className="group">
+              <summary className="t-h7 cursor-pointer list-none text-muted hover:text-fg">
+                <span className="underline underline-offset-4">X search settings</span>
+              </summary>
+              <div className="mt-4 grid gap-6 md:grid-cols-4">
+                <Field label="Min likes" name="minLikes" type="number" value={s.minLikes} />
+                <Field label="Min views (0 = off)" name="minViews" type="number" value={s.minViews} />
+                <Field label="Posts read per query (10–100)" name="fetchPerTopic" type="number" value={s.fetchPerTopic} />
+                <Field label="Post language" name="searchLang" value={s.searchLang} hint="en, ja… Empty = any" />
+              </div>
+            </details>
           </div>
-        </section>
+        </Section>
 
-        <section className="space-y-3">
-          <h2 className="text-xl font-semibold">Languages</h2>
-          <div className="card space-y-3 p-4">
-            <p className="text-sm text-zinc-500">Every post is written in each checked language. Unchecking all = all languages.</p>
-            <div className="flex flex-wrap gap-x-6 gap-y-2">
+        {/* ---------- Languages ---------- */}
+        <Section id="languages" title="Languages" text="Every post is written in each checked language. Unchecking all means all.">
+          <div className="card space-y-6 p-6">
+            <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
               {LANGUAGES.map((l) => (
-                <label key={l.code} className="flex items-center gap-2 text-sm">
+                <label
+                  key={l.code}
+                  className="flex cursor-pointer items-center gap-3 rounded-xl border border-line p-4 transition-colors hover:border-fg has-[:checked]:border-fg"
+                >
                   <input type="checkbox" name={`lang_${l.code}`} defaultChecked={s.languages.includes(l.code)} />
-                  {l.flag} {l.name} <span className="text-zinc-500">({l.native})</span>
+                  <span className="badge badge-outline">{l.code.toUpperCase()}</span>
+                  <span className="t-small">
+                    <span className="font-semibold">{l.name}</span> <span className="text-muted">{l.native}</span>
+                  </span>
                 </label>
               ))}
             </div>
             <div className="max-w-xs">
-              <label className="label">Max characters per post</label>
-              <input name="charLimit" type="number" className="input" defaultValue={s.charLimit} />
-              <p className="mt-1 text-xs text-zinc-500">500 = Threads. X allows 280 (free) or more with Premium.</p>
+              <Field
+                label="Max characters per post"
+                name="charLimit"
+                type="number"
+                value={s.charLimit}
+                hint="500 for Threads. 280 for X without Premium."
+              />
             </div>
           </div>
-        </section>
+        </Section>
 
-        <section className="space-y-3">
-          <h2 className="text-xl font-semibold">Writing & filters</h2>
-          <div className="card grid gap-4 p-4 md:grid-cols-3">
-            <div>
-              <label className="label">Style (in any language, applies to all)</label>
-              <textarea name="stylePrompt" className="input min-h-36 text-xs" defaultValue={s.stylePrompt} placeholder={DEFAULT_STYLE} />
-            </div>
-            <div>
-              <label className="label">Glossary (never translate)</label>
-              <textarea name="glossary" className="input min-h-36 font-mono text-xs" defaultValue={s.glossary} placeholder={"open-source\nfine-tuning\nAGI"} />
-            </div>
-            <div>
-              <label className="label">Blocklist (words or @handles)</label>
-              <textarea name="blocklist" className="input min-h-36 font-mono text-xs" defaultValue={s.blocklist} placeholder={"crypto\ngiveaway\n@spamaccount"} />
-            </div>
+        {/* ---------- Writing ---------- */}
+        <Section id="writing" title="Writing & filters">
+          <div className="card grid gap-6 p-6 md:grid-cols-3">
+            <Field
+              label="Style"
+              name="stylePrompt"
+              textarea
+              value={s.stylePrompt}
+              placeholder={DEFAULT_STYLE}
+              hint="In any language. Applies to all languages."
+            />
+            <Field
+              label="Glossary"
+              name="glossary"
+              textarea
+              mono
+              value={s.glossary}
+              placeholder={"open-source\nfine-tuning\nAGI"}
+              hint="Terms never translated. One per line."
+            />
+            <Field
+              label="Blocklist"
+              name="blocklist"
+              textarea
+              mono
+              value={s.blocklist}
+              placeholder={"crypto\ngiveaway\n@spamaccount"}
+              hint="Words or @handles to always skip."
+            />
           </div>
-        </section>
+        </Section>
 
-        <details className="space-y-3">
-          <summary className="cursor-pointer text-sm text-zinc-500">X post search settings</summary>
-          <div className="card mt-3 grid gap-4 p-4 md:grid-cols-4">
-            <div>
-              <label className="label">Min likes</label>
-              <input name="minLikes" type="number" className="input" defaultValue={s.minLikes} />
-            </div>
-            <div>
-              <label className="label">Min views (0 = off)</label>
-              <input name="minViews" type="number" className="input" defaultValue={s.minViews} />
-            </div>
-            <div>
-              <label className="label">Posts read per topic (10–100)</label>
-              <input name="fetchPerTopic" type="number" className="input" defaultValue={s.fetchPerTopic} />
-            </div>
-            <div>
-              <label className="label">Post language (en, ja… empty = any)</label>
-              <input name="searchLang" className="input" defaultValue={s.searchLang} />
-            </div>
-          </div>
-        </details>
-
-        <button className="btn btn-primary">Save settings</button>
+        <div className="sticky bottom-0 -mx-4 border-t border-line bg-bg px-4 py-4 md:-mx-6 md:px-6">
+          <button className="btn btn-primary btn-lg">
+            <Check size={18} aria-hidden /> Save settings
+          </button>
+        </div>
       </form>
 
-      <section className="space-y-3">
-        <h2 className="text-xl font-semibold">Recent runs</h2>
+      {/* ---------- Runs ---------- */}
+      <Section id="runs" title="Recent runs">
         <div className="card overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="text-xs text-zinc-500 uppercase">
+          <table className="table w-full">
+            <thead>
               <tr>
-                <th className="p-3">When</th>
-                <th className="p-3">What</th>
-                <th className="p-3">Found</th>
-                <th className="p-3">To AI</th>
-                <th className="p-3">New drafts</th>
-                <th className="p-3">Problems</th>
+                <th>When</th>
+                <th>What</th>
+                <th>Found</th>
+                <th>To AI</th>
+                <th>New drafts</th>
+                <th>Notes</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+            <tbody>
               {runs.length === 0 && (
                 <tr>
-                  <td className="p-3 text-zinc-500" colSpan={6}>
+                  <td className="text-muted" colSpan={6}>
                     No runs yet.
                   </td>
                 </tr>
               )}
               {runs.map((r) => (
                 <tr key={r.id}>
-                  <td className="p-3 whitespace-nowrap">{r.startedAt.toLocaleString()}</td>
-                  <td className="p-3">{r.kind === "bookmarks" ? "🔖 Bookmarks" : `📰 ${r.topicName}`}</td>
-                  <td className="p-3">{r.itemsRead}</td>
-                  <td className="p-3">{r.candidates}</td>
-                  <td className="p-3">{r.saved}</td>
-                  <td className="max-w-md p-3 text-xs">
-                    {r.error && <div className="text-rose-600">{r.error}</div>}
-                    {r.warnings && <div className="whitespace-pre-wrap text-amber-600">{r.warnings}</div>}
+                  <td className="whitespace-nowrap text-muted">{r.startedAt.toLocaleString()}</td>
+                  <td className="font-semibold whitespace-nowrap">{r.kind === "bookmarks" ? "Bookmarks" : r.topicName}</td>
+                  <td>{r.itemsRead}</td>
+                  <td>{r.candidates}</td>
+                  <td className="font-semibold">{r.saved}</td>
+                  <td className="max-w-md space-y-1">
+                    {r.error && (
+                      <p className="flex items-start gap-1.5 font-semibold">
+                        <CircleAlert size={14} className="mt-0.5 shrink-0" aria-hidden /> {r.error}
+                      </p>
+                    )}
+                    {r.warnings && (
+                      <p className="t-caption flex items-start gap-1.5 whitespace-pre-wrap text-muted">
+                        <Info size={14} className="mt-0.5 shrink-0" aria-hidden /> {r.warnings}
+                      </p>
+                    )}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-      </section>
+      </Section>
+    </div>
+  );
+}
+
+function Section({ id, title, text, children }: { id: string; title: string; text?: string; children: React.ReactNode }) {
+  return (
+    <section id={id} className="scroll-mt-24 space-y-4">
+      <div className="space-y-1">
+        <h2 className="t-h3">{title}</h2>
+        {text && <p className="t-small text-muted">{text}</p>}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function Status({ ok = false, children }: { ok?: boolean; children: React.ReactNode }) {
+  const Icon = ok ? Check : CircleAlert;
+  return (
+    <p className={`t-small flex items-start gap-2 ${ok ? "" : "font-semibold"}`}>
+      <span className={`grid size-5 shrink-0 place-items-center rounded-full ${ok ? "bg-inverse text-on-inverse" : "border border-fg"}`}>
+        <Icon size={12} aria-hidden />
+      </span>
+      <span>{children}</span>
+    </p>
+  );
+}
+
+function Toggle({ name, label, hint, checked }: { name: string; label: string; hint: string; checked: boolean }) {
+  return (
+    <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-line p-4 transition-colors hover:border-fg has-[:checked]:border-fg">
+      <input type="checkbox" name={name} defaultChecked={checked} className="mt-0.5" />
+      <span className="space-y-1">
+        <span className="t-h7 block">{label}</span>
+        <span className="t-caption block text-muted">{hint}</span>
+      </span>
+    </label>
+  );
+}
+
+function Field({
+  label,
+  name,
+  value,
+  type = "text",
+  textarea = false,
+  mono = false,
+  placeholder,
+  hint,
+  required = false,
+}: {
+  label: string;
+  name: string;
+  value?: string | number | null;
+  type?: string;
+  textarea?: boolean;
+  mono?: boolean;
+  placeholder?: string;
+  hint?: string;
+  required?: boolean;
+}) {
+  const id = `field-${name}`;
+  const cls = `input ${mono ? "font-mono t-small" : ""}`;
+  return (
+    <div>
+      <label htmlFor={id} className="field-label">
+        {label}
+      </label>
+      {textarea ? (
+        <textarea
+          id={id}
+          name={name}
+          className={`${cls} min-h-36`}
+          defaultValue={value ?? ""}
+          placeholder={placeholder}
+          required={required}
+        />
+      ) : (
+        <input
+          id={id}
+          name={name}
+          type={type}
+          className={cls}
+          defaultValue={value ?? ""}
+          placeholder={placeholder}
+          required={required}
+        />
+      )}
+      {hint && <p className="field-hint">{hint}</p>}
+    </div>
+  );
+}
+
+function TopicForm({ topic }: { topic?: Topic }) {
+  const suffix = topic ? `-${topic.id}` : "-new";
+  return (
+    <form action={saveTopic} className={`card space-y-6 p-6 ${topic ? "" : "border-dashed shadow-none"}`}>
+      {topic && <input type="hidden" name="id" value={topic.id} />}
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <h3 className="t-h5">{topic ? topic.name : "New topic"}</h3>
+        <label className="t-small flex cursor-pointer items-center gap-2">
+          <input type="checkbox" name="enabled" defaultChecked={topic?.enabled ?? true} /> Enabled
+        </label>
+      </div>
+      <div className="grid gap-6 md:grid-cols-2">
+        <TopicField id={`name${suffix}`} label="Name">
+          <input id={`name${suffix}`} name="name" className="input" defaultValue={topic?.name} placeholder="OpenAI" required />
+        </TopicField>
+        <TopicField id={`keywords${suffix}`} label="Keywords" hint="One per line. Used for search and to match news.">
+          <textarea
+            id={`keywords${suffix}`}
+            name="keywords"
+            className="input t-small min-h-28 font-mono"
+            defaultValue={topic?.keywords}
+            placeholder={"OpenAI\nChatGPT\nSam Altman"}
+            required
+          />
+        </TopicField>
+        <TopicField
+          id={`accounts${suffix}`}
+          label="X accounts to watch"
+          hint="One handle per line. Their posts are almost always popular; keyword search alone mostly finds posts with few likes."
+        >
+          <textarea
+            id={`accounts${suffix}`}
+            name="trustedAccounts"
+            className="input t-small min-h-28 font-mono"
+            defaultValue={topic?.trustedAccounts}
+            placeholder={"OpenAI\nsama\nOpenAIDevs"}
+          />
+        </TopicField>
+        <TopicField id={`feeds${suffix}`} label="Feeds only about this topic" hint="RSS or Atom URLs, one per line.">
+          <textarea
+            id={`feeds${suffix}`}
+            name="feeds"
+            className="input t-small min-h-28 font-mono"
+            defaultValue={topic?.feeds}
+            placeholder={FEED_EXAMPLES}
+          />
+        </TopicField>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <button className="btn btn-primary">
+          {topic ? <Check size={16} aria-hidden /> : <Plus size={16} aria-hidden />}
+          {topic ? "Save topic" : "Add topic"}
+        </button>
+        {topic && (
+          <button formAction={deleteTopic} className="btn btn-ghost">
+            <Trash2 size={16} aria-hidden /> Delete
+          </button>
+        )}
+      </div>
+    </form>
+  );
+}
+
+function TopicField({ id, label, hint, children }: { id: string; label: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label htmlFor={id} className="field-label">
+        {label}
+      </label>
+      {children}
+      {hint && <p className="field-hint">{hint}</p>}
     </div>
   );
 }

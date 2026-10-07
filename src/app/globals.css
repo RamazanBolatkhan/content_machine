@@ -1,38 +1,236 @@
 @import "tailwindcss";
 
-@theme inline {
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+/*
+ * Design system: based on "The Highway Code" (Motorway): type scale,
+ * spacing scale (4/8/16/24/32/40/48/56/64), chips, badges, info boxes,
+ * focus ring and small card shadow. Colors are limited to black, gray and white.
+ */
 
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
+  --bg: #ffffff;
+  --surface: #f7f7f7;
+  --surface-2: #ececec;
+  --fg: #000000;
+  --muted: #6b6b6b; /* 5.3:1 on white */
+  --subtle: #a3a3a3; /* disabled / placeholder only */
+  --line: #dcdcdc;
+  --inverse: #000000;
+  --on-inverse: #ffffff;
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.06), 0 4px 12px rgb(0 0 0 / 0.06);
+  --focus-ring: 0 0 0 2px var(--bg), 0 0 0 4px var(--fg);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --bg: #000000;
+    --surface: #141414;
+    --surface-2: #262626;
+    --fg: #ffffff;
+    --muted: #a3a3a3; /* 8.5:1 on black */
+    --subtle: #5c5c5c;
+    --line: #333333;
+    --inverse: #ffffff;
+    --on-inverse: #000000;
+    --shadow-sm: 0 0 0 1px #1f1f1f;
+  }
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-subtle: var(--subtle);
+  --color-line: var(--line);
+  --color-inverse: var(--inverse);
+  --color-on-inverse: var(--on-inverse);
+  --shadow-card: var(--shadow-sm);
+  /* "New Transport" is used when installed locally (licensed by Motorway, not bundled) */
+  --font-sans: "New Transport", var(--font-dm-sans), ui-sans-serif, system-ui, sans-serif;
 }
 
 body {
-  @apply bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100;
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 16px;
+  line-height: 24px;
+}
+
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--fg);
+  width: 18px;
+  height: 18px;
+}
+
+::selection {
+  background: var(--inverse);
+  color: var(--on-inverse);
 }
 
 @layer components {
+  /* ---------- Typography (The Highway Code scale) ---------- */
+  .t-hero { font-size: 56px; line-height: 72px; font-weight: 600; }
+  .t-h1 { font-size: 48px; line-height: 56px; font-weight: 600; }
+  .t-h2 { font-size: 32px; line-height: 40px; font-weight: 600; }
+  .t-h3 { font-size: 24px; line-height: 32px; font-weight: 600; }
+  .t-h5 { font-size: 18px; line-height: 24px; font-weight: 700; }
+  .t-h6 { font-size: 16px; line-height: 24px; font-weight: 700; }
+  .t-h7 { font-size: 14px; line-height: 20px; font-weight: 700; }
+  .t-body-lg { font-size: 18px; line-height: 28px; }
+  .t-body { font-size: 16px; line-height: 24px; }
+  .t-small { font-size: 14px; line-height: 20px; }
+  .t-caption { font-size: 12px; line-height: 16px; }
+
+  /* ---------- Buttons ---------- */
   .btn {
-    @apply inline-flex items-center justify-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:bg-zinc-800;
+    @apply inline-flex shrink-0 cursor-pointer items-center justify-center gap-2 rounded-full border border-transparent px-4 font-semibold whitespace-nowrap transition-colors select-none;
+    height: 40px;
+    font-size: 14px;
+    line-height: 24px;
+  }
+  .btn-lg {
+    height: 48px;
+    padding-inline: 24px;
+    font-size: 18px;
+  }
+  .btn-sm {
+    height: 32px;
+    padding-inline: 12px;
+  }
+  .btn-icon {
+    width: 40px;
+    padding: 0;
   }
   .btn-primary {
-    @apply border-transparent bg-zinc-900 text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300;
+    @apply bg-inverse text-on-inverse hover:opacity-80;
   }
-  .btn-good {
-    @apply border-emerald-600 text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950;
+  .btn-secondary {
+    @apply border-fg bg-bg text-fg hover:bg-surface;
   }
-  .btn-bad {
-    @apply border-rose-500 text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950;
+  .btn-tertiary {
+    @apply bg-transparent px-2 text-fg underline decoration-1 underline-offset-4 hover:decoration-2;
   }
+  .btn-ghost {
+    @apply bg-transparent text-fg hover:bg-surface;
+  }
+  .btn:disabled,
+  .btn[aria-disabled="true"] {
+    @apply cursor-not-allowed border-transparent bg-surface-2 text-subtle no-underline opacity-100;
+  }
+
+  /* ---------- Chips (choice / filter) ---------- */
+  .chip {
+    @apply inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-line bg-bg px-3 text-fg transition-colors hover:border-fg;
+    height: 32px;
+    font-size: 14px;
+    line-height: 20px;
+  }
+  .chip-selected {
+    @apply border-inverse bg-inverse text-on-inverse hover:border-inverse;
+  }
+  .chip:disabled {
+    @apply cursor-not-allowed border-line text-subtle hover:border-line;
+  }
+  .chip-count {
+    @apply rounded-full bg-surface-2 px-1.5 text-fg;
+    font-size: 12px;
+    line-height: 16px;
+  }
+  .chip-selected .chip-count {
+    @apply bg-on-inverse/20 text-on-inverse;
+  }
+
+  /* ---------- Badges ---------- */
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-full bg-surface-2 px-2 font-semibold text-fg;
+    font-size: 12px;
+    line-height: 20px;
+  }
+  .badge-outline {
+    @apply border border-line bg-transparent;
+  }
+  .badge-inverse {
+    @apply bg-inverse text-on-inverse;
+  }
+  .badge-missing {
+    @apply border border-dashed border-line bg-transparent text-subtle line-through;
+  }
+
+  /* ---------- Surfaces ---------- */
   .card {
-    @apply rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900;
+    @apply rounded-2xl border border-line bg-bg shadow-card;
+  }
+  .infobox {
+    @apply flex gap-3 rounded-xl border-l-4 border-fg bg-surface p-4;
+    font-size: 14px;
+    line-height: 20px;
+  }
+  .divider {
+    @apply border-t border-line;
+  }
+
+  /* ---------- Form fields ---------- */
+  .field-label {
+    @apply mb-2 block text-fg;
+    font-size: 14px;
+    line-height: 20px;
+    font-weight: 700;
+  }
+  .field-hint {
+    @apply mt-2 text-muted;
+    font-size: 12px;
+    line-height: 16px;
   }
   .input {
-    @apply w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-950;
+    @apply w-full rounded-lg border border-line bg-bg px-4 text-fg transition-colors outline-none placeholder:text-subtle placeholder:italic hover:border-muted focus:border-fg disabled:bg-surface disabled:text-subtle;
+    min-height: 48px;
+    font-size: 16px;
+    line-height: 24px;
   }
-  .label {
-    @apply mb-1 block text-xs font-medium text-zinc-500 uppercase tracking-wide;
+  textarea.input {
+    @apply py-3;
+  }
+  select.input {
+    @apply cursor-pointer pr-10;
+  }
+
+  /* ---------- Segmented control (tabs) ---------- */
+  .segmented {
+    @apply inline-flex flex-wrap gap-1 rounded-full bg-surface p-1;
+  }
+  .segment {
+    @apply inline-flex cursor-pointer items-center gap-1.5 rounded-full px-3 text-muted transition-colors hover:text-fg;
+    height: 32px;
+    font-size: 14px;
+    line-height: 20px;
+    font-weight: 600;
+  }
+  .segment-active {
+    @apply bg-bg text-fg shadow-card;
+  }
+
+  /* ---------- Tables ---------- */
+  .table th {
+    @apply border-b border-line px-4 py-3 text-left text-muted;
+    font-size: 12px;
+    line-height: 16px;
+    font-weight: 700;
+  }
+  .table td {
+    @apply border-b border-line px-4 py-3 align-top;
+    font-size: 14px;
+    line-height: 20px;
+  }
+  .table tr:last-child td {
+    @apply border-b-0;
   }
 }

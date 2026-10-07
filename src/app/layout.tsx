@@ -1,42 +1,42 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Geist, Geist_Mono } from "next/font/google";
+import { DM_Sans } from "next/font/google";
+import { TriangleAlert } from "lucide-react";
+import { NavLinks } from "@/components/NavLinks";
 import { aiConfigured, aiSetupHint } from "@/lib/ai";
 import "./globals.css";
 
-const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin", "cyrillic"] });
-const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
+// Fallback for "New Transport" (see globals.css)
+const dmSans = DM_Sans({ variable: "--font-dm-sans", subsets: ["latin", "latin-ext"] });
 
 export const metadata: Metadata = {
   title: "Content Machine",
-  description: "Turn X bookmarks and AI news into ready-to-post social posts in six languages",
+  description: "Turn X posts, bookmarks and AI news into ready-to-post social posts in six languages",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   const aiProblem = aiConfigured() ? null : aiSetupHint();
 
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-      <body className="min-h-screen font-sans">
-        <header className="border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-          <nav className="mx-auto flex max-w-6xl items-center gap-6 px-4 py-3">
-            <Link href="/" className="font-semibold">
-              🤖 Content Machine
+    <html lang="en" className={`${dmSans.variable} antialiased`}>
+      <body className="min-h-screen bg-bg font-sans text-fg">
+        <header className="sticky top-0 z-10 border-b border-line bg-bg">
+          <nav className="mx-auto flex h-16 max-w-6xl items-center gap-10 px-4 md:px-6">
+            <Link href="/" className="t-h6 flex items-center gap-2">
+              <span className="grid size-8 place-items-center rounded-lg bg-inverse text-on-inverse t-caption font-bold">CM</span>
+              Content Machine
             </Link>
-            <Link href="/" className="text-sm text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100">
-              Drafts
-            </Link>
-            <Link href="/settings" className="text-sm text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100">
-              Settings
-            </Link>
+            <NavLinks />
           </nav>
         </header>
         {aiProblem && (
-          <div className="border-b border-amber-300 bg-amber-50 px-4 py-2 text-center text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
-            {aiProblem}. See <code>.env.example</code>.
+          <div className="border-b border-line bg-surface">
+            <p className="t-small mx-auto flex max-w-6xl items-center gap-2 px-4 py-3 md:px-6">
+              <TriangleAlert size={16} aria-hidden /> {aiProblem}. See <code>.env.example</code>.
+            </p>
           </div>
         )}
-        <main className="mx-auto max-w-6xl px-4 py-6">{children}</main>
+        <main className="mx-auto max-w-6xl px-4 py-8 md:px-6 md:py-10">{children}</main>
       </body>
     </html>
   );

@@ -375,9 +375,13 @@ Stop the app and delete the `data/` folder. It's created again on the next start
 
 ---
 
+## 🎨 Design
+
+The interface follows the type scale, spacing and components of Motorway's [The Highway Code](https://thc.motorway.co.uk/0566ad526/p/652544-the-highway-code) design system, in a strict **black, gray and white** palette with light and dark mode. Its typeface, *New Transport*, is licensed and not included: install it on your computer and the app uses it automatically; otherwise it falls back to DM Sans.
+
 ## 🧱 Built with
 
-[Next.js 16](https://nextjs.org) · [React 19](https://react.dev) · [Tailwind CSS 4](https://tailwindcss.com) · [Drizzle ORM](https://orm.drizzle.team) + SQLite · [Claude Code](https://code.claude.com/docs) · [AI SDK](https://ai-sdk.dev) · [X API v2](https://docs.x.com)
+[Next.js 16](https://nextjs.org) · [React 19](https://react.dev) · [Tailwind CSS 4](https://tailwindcss.com) · [Lucide icons](https://lucide.dev) · [Drizzle ORM](https://orm.drizzle.team) + SQLite · [Claude Code](https://code.claude.com/docs) · [AI SDK](https://ai-sdk.dev) · [X API v2](https://docs.x.com)
 
 ---
 

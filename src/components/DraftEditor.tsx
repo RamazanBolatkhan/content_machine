@@ -1,5 +1,6 @@
 "use client";
 
+import { Check, CircleAlert, Copy, Download, History, LoaderCircle, Save, Send, Sparkles, Undo2, Wand2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { saveManualVersion, writeMissingLanguagesAction } from "@/app/actions";
@@ -16,9 +17,9 @@ const QUICK_ASKS = [
 ];
 
 const SOURCE_LABEL: Record<DraftVersion["source"], string> = {
-  ai_scout: "🤖 AI",
-  ai_edit: "🤖 AI edit",
-  manual: "✍️ Manual",
+  ai_scout: "AI draft",
+  ai_edit: "AI edit",
+  manual: "Your edit",
 };
 
 export function DraftEditor({
@@ -47,6 +48,7 @@ export function DraftEditor({
   const [saving, startSave] = useTransition();
   const [filling, startFill] = useTransition();
 
+  const info = langInfo(lang);
   const latest = latestFor(lang);
   const text = edits[lang] ?? latest;
   const setText = (value: string) => setEdits((e) => ({ ...e, [lang]: value }));
@@ -54,6 +56,7 @@ export function DraftEditor({
   const over = text.length > charLimit;
   const missing = langs.filter((c) => !latestFor(c));
   const langVersions = versions.filter((v) => v.lang === lang);
+  const discard = () => setEdits((e) => ({ ...e, [lang]: undefined }));
 
   async function askAi(ask: string) {
     if (!ask.trim() || aiBusy || !text.trim()) return;
@@ -67,7 +70,7 @@ export function DraftEditor({
       });
       const body = await res.text();
       if (!res.ok) throw new Error(body || `Error ${res.status}`);
-      setEdits((e) => ({ ...e, [lang]: undefined })); // show the saved version
+      discard(); // show the saved version
       setInstruction("");
       router.refresh();
     } catch (e) {
@@ -93,138 +96,172 @@ export function DraftEditor({
   }
 
   return (
-    <div className="space-y-4">
-      <div className="card p-4">
-        <div className="mb-3 flex flex-wrap gap-1.5">
-          {langs.map((code) => {
-            const info = langInfo(code);
-            const has = Boolean(latestFor(code));
-            return (
-              <button
-                key={code}
-                onClick={() => setLang(code)}
-                className={`rounded-full px-3 py-1 text-sm ${
-                  code === lang
-                    ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
-                    : "bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700"
-                } ${has ? "" : "opacity-50"}`}
-                title={info.name}
-              >
-                {info.flag} {info.native}
-                {edits[code] !== undefined && edits[code] !== latestFor(code) && " •"}
-              </button>
-            );
-          })}
+    <div className="space-y-6">
+      {/* ---- Post ---- */}
+      <section className="card space-y-4 p-6" aria-labelledby="post-heading">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 id="post-heading" className="t-h5">
+            Post
+          </h2>
+          <div className="segmented" role="tablist" aria-label="Language">
+            {langs.map((code) => {
+              const has = Boolean(latestFor(code));
+              const unsaved = edits[code] !== undefined && edits[code] !== latestFor(code);
+              return (
+                <button
+                  key={code}
+                  role="tab"
+                  aria-selected={code === lang}
+                  onClick={() => setLang(code)}
+                  className={`segment ${code === lang ? "segment-active" : ""} ${has ? "" : "line-through decoration-1"}`}
+                  title={`${langInfo(code).name}${has ? "" : " (not written yet)"}`}
+                >
+                  {code.toUpperCase()}
+                  {unsaved && <span className="size-1.5 rounded-full bg-fg" aria-label="unsaved changes" />}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {missing.length > 0 && (
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-200">
-            <span>Not written yet: {missing.map((c) => langInfo(c).name).join(", ")}</span>
-            <button className="btn text-xs" onClick={fillMissing} disabled={filling}>
-              {filling ? "Writing…" : "✨ Write missing languages"}
+          <div className="infobox items-center justify-between">
+            <div className="flex items-center gap-3">
+              <CircleAlert size={18} className="shrink-0" aria-hidden />
+              <span>Not written yet: {missing.map((c) => langInfo(c).name).join(", ")}</span>
+            </div>
+            <button className="btn btn-secondary btn-sm" onClick={fillMissing} disabled={filling}>
+              {filling ? <LoaderCircle size={16} className="animate-spin" aria-hidden /> : <Wand2 size={16} aria-hidden />}
+              {filling ? "Writing…" : "Write them"}
             </button>
           </div>
         )}
 
-        <div className="mb-2 flex items-center justify-between">
-          <span className="label">
-            {langInfo(lang).flag} {langInfo(lang).name} post
-          </span>
-          <span className={`text-xs ${over ? "font-semibold text-rose-600" : "text-zinc-500"}`}>
-            {text.length} / {charLimit}
-          </span>
+        <div>
+          <div className="mb-2 flex items-end justify-between gap-4">
+            <label htmlFor="post-text" className="field-label mb-0">
+              {info.name} <span className="font-normal text-muted">· {info.native}</span>
+            </label>
+            <span className={`t-caption ${over ? "font-bold text-fg" : "text-muted"}`} aria-live="polite">
+              {text.length} / {charLimit}
+              {over && " · too long"}
+            </span>
+          </div>
+          <textarea
+            id="post-text"
+            lang={lang}
+            className={`input t-body-lg min-h-64 ${over ? "border-fg border-2" : ""}`}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            disabled={aiBusy}
+            placeholder={latest ? "" : "No text in this language yet. Write one, or press “Write them” above."}
+          />
         </div>
-        <textarea
-          lang={lang}
-          className="input min-h-56 text-base leading-relaxed"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          disabled={aiBusy}
-          placeholder={latest ? "" : "No text in this language yet. Write one or press “Write missing languages”."}
-        />
-        <div className="mt-3 flex flex-wrap gap-2">
+
+        <div className="flex flex-wrap items-center gap-2">
           <button className="btn btn-primary" onClick={copy} disabled={!text.trim()}>
-            {copied ? "✓ Copied" : "📋 Copy text"}
+            {copied ? <Check size={16} aria-hidden /> : <Copy size={16} aria-hidden />}
+            {copied ? "Copied" : "Copy text"}
           </button>
           {hasMedia && (
-            <a className="btn" href={`/api/drafts/${draftId}/media`}>
-              ⬇️ Download media
+            <a className="btn btn-secondary" href={`/api/drafts/${draftId}/media`}>
+              <Download size={16} aria-hidden /> Download media
             </a>
           )}
           <button
-            className="btn"
+            className="btn btn-secondary"
             disabled={!dirty || !text.trim() || saving || aiBusy}
             onClick={() =>
               startSave(async () => {
                 await saveManualVersion(draftId, lang, text);
-                setEdits((e) => ({ ...e, [lang]: undefined }));
+                discard();
               })
             }
           >
-            {saving ? "Saving…" : "💾 Save edit"}
+            <Save size={16} aria-hidden /> {saving ? "Saving…" : "Save edit"}
           </button>
           {dirty && !aiBusy && (
-            <button className="btn" onClick={() => setEdits((e) => ({ ...e, [lang]: undefined }))}>
-              Undo changes
+            <button className="btn btn-tertiary" onClick={discard}>
+              <Undo2 size={16} aria-hidden /> Undo changes
             </button>
           )}
         </div>
-      </div>
+      </section>
 
-      <div className="card p-4">
-        <span className="label">Ask AI to adjust the {langInfo(lang).name} post</span>
-        <div className="mb-2 flex flex-wrap gap-1.5">
+      {/* ---- Ask AI ---- */}
+      <section className="card space-y-4 p-6" aria-labelledby="ai-heading">
+        <div className="space-y-1">
+          <h2 id="ai-heading" className="t-h5 flex items-center gap-2">
+            <Sparkles size={18} aria-hidden /> Ask AI to adjust
+          </h2>
+          <p className="t-small text-muted">Changes the {info.name} post only. You can ask in any language.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
           {QUICK_ASKS.map((q) => (
-            <button key={q} className="btn text-xs" disabled={aiBusy || !text.trim()} onClick={() => askAi(q)}>
+            <button key={q} className="chip" disabled={aiBusy || !text.trim()} onClick={() => askAi(q)}>
               {q}
             </button>
           ))}
         </div>
         <form
-          className="flex gap-2"
+          className="flex flex-col gap-2 sm:flex-row"
           onSubmit={(e) => {
             e.preventDefault();
             askAi(instruction);
           }}
         >
+          <label htmlFor="ai-instruction" className="sr-only">
+            Instruction for the AI
+          </label>
           <input
+            id="ai-instruction"
             className="input"
-            placeholder="e.g. “mention that it's free for students” (any language)"
+            placeholder="e.g. “mention that it's free for students”"
             value={instruction}
             onChange={(e) => setInstruction(e.target.value)}
             disabled={aiBusy}
           />
-          <button className="btn btn-primary" disabled={aiBusy || !instruction.trim() || !text.trim()}>
+          <button className="btn btn-primary btn-lg" disabled={aiBusy || !instruction.trim() || !text.trim()}>
+            {aiBusy ? <LoaderCircle size={18} className="animate-spin" aria-hidden /> : <Send size={18} aria-hidden />}
             {aiBusy ? "Writing…" : "Send"}
           </button>
         </form>
-        {error && <p className="mt-2 text-sm text-rose-600">{error}</p>}
-      </div>
+        {error && (
+          <p className="t-small flex items-start gap-2 font-semibold" role="alert">
+            <CircleAlert size={16} className="mt-0.5 shrink-0" aria-hidden /> {error}
+          </p>
+        )}
+      </section>
 
-      <div className="card p-4">
-        <span className="label">{langInfo(lang).name} version history</span>
-        {langVersions.length === 0 && <p className="text-sm text-zinc-500">No versions yet.</p>}
-        <ul className="divide-y divide-zinc-200 dark:divide-zinc-800">
+      {/* ---- History ---- */}
+      <section className="card p-6" aria-labelledby="history-heading">
+        <h2 id="history-heading" className="t-h5 mb-2 flex items-center gap-2">
+          <History size={18} aria-hidden /> {info.name} history
+        </h2>
+        {langVersions.length === 0 && <p className="t-small text-muted">No versions yet.</p>}
+        <ul>
           {langVersions.map((v, i) => (
-            <li key={v.id} className="flex items-start justify-between gap-3 py-2 text-sm">
-              <div className="min-w-0">
-                <div className="text-xs text-zinc-500">
-                  {SOURCE_LABEL[v.source]} · {v.createdAt.toLocaleString()} {i === 0 && "· current"}
+            <li key={v.id} className="flex items-start justify-between gap-4 border-b border-line py-4 last:border-b-0">
+              <div className="min-w-0 space-y-1">
+                <div className="t-caption flex flex-wrap items-center gap-2 text-muted">
+                  <span className={`badge ${i === 0 ? "badge-inverse" : ""}`}>{i === 0 ? "Current" : SOURCE_LABEL[v.source]}</span>
+                  {i === 0 && <span>{SOURCE_LABEL[v.source]}</span>}
+                  <span>{v.createdAt.toLocaleString()}</span>
                 </div>
-                {v.instruction && <div className="text-xs text-zinc-500 italic">“{v.instruction}”</div>}
-                <p className="line-clamp-2" lang={v.lang}>
+                {v.instruction && <p className="t-caption text-muted italic">“{v.instruction}”</p>}
+                <p className="t-small line-clamp-2" lang={v.lang}>
                   {v.text}
                 </p>
               </div>
               {v.text !== text && (
-                <button className="btn shrink-0 text-xs" onClick={() => setText(v.text)} disabled={aiBusy}>
+                <button className="btn btn-secondary btn-sm" onClick={() => setText(v.text)} disabled={aiBusy}>
                   Load
                 </button>
               )}
             </li>
           ))}
         </ul>
-      </div>
+      </section>
     </div>
   );
 }

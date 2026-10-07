@@ -99,6 +99,11 @@ export function findV2Payload(value: unknown, depth = 0): V2Payload | null {
   return null;
 }
 
+/** X returns post text with &amp; &lt; &gt; escaped. */
+export function decodeEntities(text: string): string {
+  return text.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, "&");
+}
+
 function pickMedia(m: V2Media): Omit<MediaItem, "file"> | null {
   if (m.type === "photo" && m.url) {
     return { type: "photo", remoteUrl: m.url };
@@ -125,7 +130,7 @@ export function parseV2Posts(payload: V2Payload): XPost[] {
     const pm = p.public_metrics ?? {};
     return {
       id: p.id,
-      text: p.note_tweet?.text ?? p.text,
+      text: decodeEntities(p.note_tweet?.text ?? p.text),
       createdAt: p.created_at ? new Date(p.created_at) : null,
       lang: p.lang ?? null,
       authorHandle: handle,
