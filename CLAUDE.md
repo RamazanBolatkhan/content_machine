@@ -6,7 +6,7 @@ Local web app for an **AI news** account: collects the owner's **X bookmarks** (
 
 Stack: Next.js 16 (App Router) + Tailwind, SQLite via Drizzle (`data/app.db`), AI via `claude -p` (`src/lib/claude-cli.ts`) or optionally AI SDK 7 + Vercel AI Gateway (`AI_PROVIDER=gateway`).
 
-Design (see `src/app/globals.css`): based on Motorway's "The Highway Code" design system (type scale `.t-h1…t-caption`, spacing 4/8/16/24/32/40/48/56/64, `.btn`, `.chip`, `.badge`, `.card`, `.infobox`, `.input`, `.segmented`). **Only black, gray and white**: use the tokens `bg`, `surface`, `surface-2`, `fg`, `muted`, `subtle`, `line`, `inverse`, `on-inverse`; never Tailwind color palettes, colored emoji or flags in the UI. Icons are `lucide-react`. Light and dark mode both supported.
+Design (see `src/app/globals.css`): based on Motorway's "The Highway Code" design system (type scale `.t-h1…t-caption`, spacing 4/8/16/24/32/40/48/56/64, `.btn`, `.chip`, `.badge`, `.card`, `.infobox`, `.input`, `.segmented`). **Only black, gray and white**: use the tokens `bg`, `surface`, `surface-2`, `fg`, `muted`, `subtle`, `line`, `inverse`, `on-inverse`; never Tailwind color palettes, colored emoji or flags in the UI. Icons are `lucide-react`. Light and dark mode both supported. Logo: `src/components/Logo.tsx` (`LogoMark`, square or circle), favicon `src/app/icon.svg` (round), README image `docs/logo.png`.
 
 Rules:
 - Next.js 16 and AI SDK 7 differ from older versions: check `node_modules/next/dist/docs/` and `node_modules/ai/docs/` before using an API (see AGENTS.md).

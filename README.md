@@ -1,6 +1,8 @@
 <div align="center">
 
-# 🤖 Content Machine
+<img src="docs/logo.png" alt="Content Machine" width="360" />
+
+# Content Machine
 
 **Turn your X bookmarks and the latest AI news into ready-to-post social posts in six languages, with Claude doing the heavy lifting.**
 

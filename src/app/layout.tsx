@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { DM_Sans } from "next/font/google";
 import { TriangleAlert } from "lucide-react";
+import { LogoMark } from "@/components/Logo";
 import { NavLinks } from "@/components/NavLinks";
 import { aiConfigured, aiSetupHint } from "@/lib/ai";
 import "./globals.css";
@@ -22,9 +23,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="min-h-screen bg-bg font-sans text-fg">
         <header className="sticky top-0 z-10 border-b border-line bg-bg">
           <nav className="mx-auto flex h-16 max-w-6xl items-center gap-10 px-4 md:px-6">
-            <Link href="/" className="t-h6 flex items-center gap-2">
-              <span className="grid size-8 place-items-center rounded-lg bg-inverse text-on-inverse t-caption font-bold">CM</span>
-              Content Machine
+            <Link href="/" className="t-h6 flex items-center gap-2.5" aria-label="Content Machine, home">
+              <LogoMark size={32} />
+              <span aria-hidden>Content Machine</span>
             </Link>
             <NavLinks />
           </nav>
