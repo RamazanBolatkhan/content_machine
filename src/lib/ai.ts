@@ -69,7 +69,7 @@ export async function aiText(task: AiTask): Promise<string> {
   return text;
 }
 
-export const DEFAULT_STYLE = `Write like a sharp, friendly AI news account: short, clear, no corporate fluff.
+export const DEFAULT_STYLE = `Write like a sharp, friendly news account: short, clear, no corporate fluff.
 First line = the hook (what happened and why it matters). 1–2 fitting emoji are fine. No hashtags unless asked.
 Explain jargon in a few words for non-experts. Never invent facts that are not in the source. Mark rumors and leaks as unconfirmed.`;
 

@@ -38,7 +38,7 @@ export async function writePosts(
     const batch = items.slice(start, start + BATCH_SIZE);
     const result = await aiObject(schema, {
       instructions: [
-        "You write short social media posts about AI news for a multilingual audience.",
+        "You write short social media posts about news and interesting content for a multilingual audience.",
         `For each item, write one complete, ready-to-post text in each of these languages: ${langs.map((c) => langInfo(c).hint).join(", ")}.`,
         "Each language version must stand on its own (no 'see above', no mixing languages).",
         "Only use facts from the item. For long articles, pick the 2–4 most important facts.",

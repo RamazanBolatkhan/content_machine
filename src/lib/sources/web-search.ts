@@ -23,12 +23,12 @@ export async function searchTopicNews(topic: Topic, sinceHours: number, maxItems
   const { items } = await aiObject(resultSchema, {
     web: "search",
     instructions: [
-      "You are an AI news researcher. Use web search to find real, recent news. Never invent items.",
-      "Prefer official sources (company blogs, papers, release notes) and reputable tech outlets. Skip SEO spam, listicles, rumor farms and how-to guides.",
+      "You are a news researcher. Use web search to find real, recent news. Never invent items.",
+      "Prefer official sources, research and reputable outlets for the subject. Skip SEO spam, listicles, rumor farms and generic how-to guides.",
       "Each item must be a separate news story with its own direct URL.",
     ].join("\n"),
     prompt: [
-      `Today is ${today}. Find up to ${maxItems} of the most important news stories from the last ${days} day(s) about "${topic.name}" in the field of artificial intelligence.`,
+      `Today is ${today}. Find up to ${maxItems} of the most important news stories from the last ${days} day(s) about "${topic.name}".`,
       lines(topic.keywords).length ? `Related names / search terms: ${lines(topic.keywords).join(", ")}.` : "",
       "Only include stories published within that period. If there is no real news, return an empty list.",
     ]

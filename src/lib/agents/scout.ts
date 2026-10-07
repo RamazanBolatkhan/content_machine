@@ -214,19 +214,19 @@ async function judge(candidates: Candidate[], opts: { curated: boolean; topics: 
 
     const { items } = await aiObject(judgementSchema, {
       instructions: [
-        "You are the editor of a multilingual AI news account on social media.",
-        "Pick the matching topic id for each item (or null if none fits) and rate how interesting it is for people following AI.",
+        "You are the editor of a multilingual social media account about the owner's topics (listed below with their keywords).",
+        "Pick the matching topic id for each item (or null if none fits) and rate how interesting it is for people who follow that topic.",
         opts.curated
           ? "The owner hand-picked these X posts (bookmarks). Set keep=true for all of them."
           : [
-              "Decide for each item if it is worth posting: model and product launches, major updates, research breakthroughs, funding and acquisitions, policy and regulation, notable open-source releases, credible leaks, or genuinely useful/surprising AI content.",
-              "Reject: spam, ads, giveaways, SEO listicles, generic opinion pieces, 'top 10 prompts' guides, minor drama, items not about AI, old news.",
+              "Decide for each item if it is worth posting for followers of its topic: real news, launches and announcements, new research or data, notable updates, expert insights, practical advice from credible people, or genuinely useful/surprising content.",
+              "Reject: spam, ads, giveaways, SEO listicles, empty engagement bait, minor drama, items that match a keyword by accident but are not really about the topic, old news.",
               "If an item covers a story in the 'already have' list, reuse that storyKey and set keep=false.",
               "If several items cover the same new story, give them the same storyKey; the app keeps the best.",
             ].join("\n"),
       ].join("\n"),
       prompt: [
-        `Topics (id: name): ${opts.topics.map((g) => `${g.id}: ${g.name}`).join("; ") || "none"}`,
+        `Topics (id: name [keywords]): ${opts.topics.map((t) => `${t.id}: ${t.name} [${lines(t.keywords).join(", ")}]`).join("; ") || "none"}`,
         "",
         recent.length
           ? `Already have (storyKey: text):\n${recent.map((r) => `- ${r.storyKey}: ${r.text.slice(0, 140).replace(/\s+/g, " ")}`).join("\n")}`

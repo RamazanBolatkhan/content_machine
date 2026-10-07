@@ -11,7 +11,7 @@ const QUICK_ASKS = [
   "Make it shorter",
   "Make it more exciting",
   "More neutral, like a news report",
-  "Add context for people who don't follow AI",
+  "Add context for newcomers to the topic",
   "Explain the technical terms simply",
   "Remove emoji",
 ];
