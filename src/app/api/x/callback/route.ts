@@ -1,9 +1,10 @@
+import { requestOrigin } from "@/lib/request-origin";
 import { completeLogin } from "@/lib/x/auth";
 
 /** X redirects here after the owner approves access. */
 export async function GET(req: Request) {
   const url = new URL(req.url);
-  const settingsUrl = new URL("/settings", url.origin);
+  const settingsUrl = new URL("/settings", requestOrigin(req));
   const error = url.searchParams.get("error");
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
