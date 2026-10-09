@@ -3,7 +3,6 @@ import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { ArrowLeft, ArrowUpRight, Eye, Heart, Info, MessageCircle, Repeat2, Sparkles } from "lucide-react";
 import { DraftEditor } from "@/components/DraftEditor";
-import { MediaGrid } from "@/components/MediaGrid";
 import { SourceBadge } from "@/components/SourceBadge";
 import { StatusButtons } from "@/components/StatusButtons";
 import { enabledLangs } from "@/lib/languages";
@@ -59,7 +58,7 @@ export default async function DraftPage({ params }: PageProps<"/drafts/[id]">) {
 
           {isX && draft.sourceName && <p className="t-h6">{draft.sourceName}</p>}
           <p className="t-body whitespace-pre-wrap">{draft.originalText}</p>
-          <MediaGrid media={draft.media} />
+          <p className="t-small text-muted">Open the source post to view its images or videos.</p>
 
           <div className="divider" />
 
@@ -96,7 +95,6 @@ export default async function DraftPage({ params }: PageProps<"/drafts/[id]">) {
           versions={versions}
           langs={enabledLangs(settings)}
           charLimit={settings.charLimit}
-          hasMedia={draft.media.some((x) => x.file)}
         />
       </div>
     </div>

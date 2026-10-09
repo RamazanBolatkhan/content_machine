@@ -1,17 +1,16 @@
 import { db, schema } from "@/db";
-import type { Draft } from "@/db/schema";
 import { AI_PROVIDER, aiText, writingRules } from "@/lib/ai";
 import { enabledLangs, langInfo, type LangCode } from "@/lib/languages";
-import { getDraft, getSettings, latestTexts } from "@/lib/queries";
+import { getDraft, getSettings, latestTexts, type TextDraft } from "@/lib/queries";
 import { writePosts } from "./writer";
 
-const isXSource = (draft: Draft) => draft.source === "x_bookmark" || draft.source === "x_search";
+const isXSource = (draft: TextDraft) => draft.source === "x_bookmark" || draft.source === "x_search";
 
 /**
  * Rewrites one language version of a draft following the owner's instruction
  * and saves the result as a new "ai_edit" version.
  */
-export async function editDraft(draft: Draft, lang: LangCode, currentText: string, instruction: string): Promise<string> {
+export async function editDraft(draft: TextDraft, lang: LangCode, currentText: string, instruction: string): Promise<string> {
   const settings = await getSettings();
   const canBrowse = AI_PROVIDER === "claude-code" && !isXSource(draft);
 

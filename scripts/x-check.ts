@@ -22,6 +22,6 @@ if (process.env.X_MODE !== "direct") {
 console.log(`\nSearching recent posts for: ${query} (mode: ${process.env.X_MODE ?? "mcp"})`);
 const posts = await searchRecentPosts({ query: `${query} -is:retweet`, maxResults: 10, sinceHours: 24 });
 for (const p of posts) {
-  console.log(`- @${p.authorHandle} ❤️ ${p.metrics.likes} 🔁 ${p.metrics.reposts} media:${p.media.length}  ${p.text.slice(0, 90).replace(/\s+/g, " ")}`);
+  console.log(`- @${p.authorHandle} ❤️ ${p.metrics.likes} 🔁 ${p.metrics.reposts} ${p.url}  ${p.text.slice(0, 90).replace(/\s+/g, " ")}`);
 }
 console.log(`\n${posts.length} posts. X connection works ✅`);

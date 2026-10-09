@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, CircleAlert, Copy, Download, History, LoaderCircle, Save, Send, Sparkles, Undo2, Wand2 } from "lucide-react";
+import { Check, CircleAlert, Copy, History, LoaderCircle, Save, Send, Sparkles, Undo2, Wand2 } from "lucide-react";
 import { useState, useTransition } from "react";
 import { saveManualVersion } from "@/app/actions";
 import type { DraftVersion } from "@/db/schema";
@@ -27,13 +27,11 @@ export function DraftEditor({
   versions,
   langs,
   charLimit,
-  hasMedia,
 }: {
   draftId: number;
   versions: DraftVersion[]; // newest first
   langs: LangCode[];
   charLimit: number;
-  hasMedia: boolean;
 }) {
   const editJob = useJob<{ text: string }>();
   const fillJob = useJob<{ written: number }>();
@@ -150,11 +148,6 @@ export function DraftEditor({
             {copied ? <Check size={16} aria-hidden /> : <Copy size={16} aria-hidden />}
             {copied ? "Copied" : "Copy text"}
           </button>
-          {hasMedia && (
-            <a className="btn btn-secondary" href={`/api/drafts/${draftId}/media`}>
-              <Download size={16} aria-hidden /> Download media
-            </a>
-          )}
           <button
             className="btn btn-secondary"
             disabled={!dirty || !text.trim() || saving || aiBusy}

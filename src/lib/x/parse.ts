@@ -1,4 +1,4 @@
-import type { MediaItem, PostMetrics } from "@/db/schema";
+import type { PostMetrics } from "@/db/schema";
 
 export type XPost = {
   id: string;
@@ -9,7 +9,6 @@ export type XPost = {
   authorName: string;
   url: string;
   metrics: PostMetrics;
-  media: Omit<MediaItem, "file">[];
   isReply: boolean;
 };
 
@@ -20,22 +19,13 @@ export const POST_FIELDS = {
     "public_metrics",
     "author_id",
     "lang",
-    "attachments",
     "note_tweet",
     "in_reply_to_user_id",
   ],
-  expansions: ["author_id", "attachments.media_keys"],
-  "media.fields": ["url", "preview_image_url", "type", "variants"],
+  expansions: ["author_id"],
   "user.fields": ["username", "name"],
 } as const;
 
-type V2Media = {
-  media_key: string;
-  type: string;
-  url?: string;
-  preview_image_url?: string;
-  variants?: { bit_rate?: number; content_type: string; url: string }[];
-};
 type V2User = { id: string; username: string; name: string };
 type V2Post = {
   id: string;
@@ -45,7 +35,6 @@ type V2Post = {
   author_id?: string;
   in_reply_to_user_id?: string;
   note_tweet?: { text: string };
-  attachments?: { media_keys?: string[] };
   public_metrics?: {
     like_count?: number;
     retweet_count?: number;
@@ -57,7 +46,7 @@ type V2Post = {
 };
 export type V2Payload = {
   data?: V2Post[] | V2Post;
-  includes?: { users?: V2User[]; media?: V2Media[] };
+  includes?: { users?: V2User[] };
   errors?: { detail?: string; title?: string; message?: string }[];
 };
 
@@ -104,25 +93,9 @@ export function decodeEntities(text: string): string {
   return text.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, "&");
 }
 
-function pickMedia(m: V2Media): Omit<MediaItem, "file"> | null {
-  if (m.type === "photo" && m.url) {
-    return { type: "photo", remoteUrl: m.url };
-  }
-  if ((m.type === "video" || m.type === "animated_gif") && m.variants?.length) {
-    const best = m.variants
-      .filter((v) => v.content_type === "video/mp4")
-      .sort((a, b) => (b.bit_rate ?? 0) - (a.bit_rate ?? 0))[0];
-    if (best) {
-      return { type: m.type, remoteUrl: best.url, previewUrl: m.preview_image_url };
-    }
-  }
-  return null;
-}
-
 export function parseV2Posts(payload: V2Payload): XPost[] {
   const posts = Array.isArray(payload.data) ? payload.data : payload.data ? [payload.data] : [];
   const users = new Map((payload.includes?.users ?? []).map((u) => [u.id, u]));
-  const media = new Map((payload.includes?.media ?? []).map((m) => [m.media_key, m]));
 
   return posts.map((p) => {
     const user = p.author_id ? users.get(p.author_id) : undefined;
@@ -145,11 +118,6 @@ export function parseV2Posts(payload: V2Payload): XPost[] {
         views: pm.impression_count ?? null,
         bookmarks: pm.bookmark_count ?? 0,
       },
-      media: (p.attachments?.media_keys ?? [])
-        .map((k) => media.get(k))
-        .filter((m): m is V2Media => Boolean(m))
-        .map(pickMedia)
-        .filter((m): m is Omit<MediaItem, "file"> => Boolean(m)),
     };
   });
 }

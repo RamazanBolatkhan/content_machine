@@ -1,19 +1,16 @@
 /**
- * One-time move of the old local SQLite data (data/app.db + data/media) into Postgres + Vercel Blob.
+ * One-time move of the old local SQLite text and source links (data/app.db) into Postgres.
+ * Media is not imported; open the source links to view it.
  *   npm run db:import-sqlite
  * Refuses to run if Postgres already has drafts (use --force to import anyway).
  */
 import fs from "node:fs";
 import path from "node:path";
 import Database from "better-sqlite3";
-import { put } from "@vercel/blob";
 import { sql } from "drizzle-orm";
 import { db, schema } from "../src/db";
-import type { MediaItem } from "../src/db/schema";
 
 const SQLITE = path.join(process.cwd(), "data", "app.db");
-const MEDIA = path.join(process.cwd(), "data", "media");
-const MAX_BYTES = 150 * 1024 * 1024;
 
 type Row = Record<string, unknown>;
 const date = (v: unknown) => (v == null ? null : new Date(Number(v) * 1000));
@@ -40,22 +37,6 @@ async function main() {
       return [];
     }
   };
-
-  // Media: upload each local file once
-  const uploaded = new Map<string, string | null>();
-  async function blobFor(file: string | null): Promise<string | null> {
-    if (!file || /^https?:/.test(file)) return file;
-    if (uploaded.has(file)) return uploaded.get(file)!;
-    const p = path.join(MEDIA, path.basename(file));
-    let url: string | null = null;
-    if (fs.existsSync(p) && fs.statSync(p).size <= MAX_BYTES) {
-      const body = fs.readFileSync(p);
-      const blob = await put(`media/${file}`, body, { access: "public", addRandomSuffix: true, multipart: body.length > 20e6 });
-      url = blob.url;
-    }
-    uploaded.set(file, url);
-    return url;
-  }
 
   const topics = all("topics");
   for (const t of topics) {
@@ -101,9 +82,6 @@ async function main() {
   const drafts = all("drafts");
   let i = 0;
   for (const d of drafts) {
-    const media = await Promise.all(
-      json<MediaItem[]>(d.media, []).map(async (m) => ({ ...m, file: await blobFor(m.file) })),
-    );
     await db
       .insert(schema.drafts)
       .values({
@@ -121,7 +99,6 @@ async function main() {
         aiReason: String(d.ai_reason ?? ""),
         storyKey: String(d.story_key ?? ""),
         matchesTop: bool(d.matches_top ?? 0),
-        media,
         status: d.status as never,
         createdAt: date(d.created_at) ?? new Date(),
       })
@@ -212,10 +189,9 @@ async function main() {
     );
   }
 
-  const stored = [...uploaded.values()].filter(Boolean).length;
   console.log(
     `Imported ${topics.length} topics, ${drafts.length} drafts, ${versions.length} versions, ${seen.length} seen items, ` +
-      `${x?.refresh_token ? "X login, " : ""}${stored}/${uploaded.size} media files to Blob.`,
+      `${x?.refresh_token ? "including X login. " : ""}Source links retained; media not imported.`,
   );
   process.exit(0);
 }

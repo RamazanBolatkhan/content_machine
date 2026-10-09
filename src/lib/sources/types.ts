@@ -5,5 +5,4 @@ export type NewsItem = {
   summary: string;
   sourceName: string;
   publishedAt: Date | null;
-  imageUrl?: string;
 };

@@ -1,9 +1,8 @@
 import Link from "next/link";
 import { connection } from "next/server";
-import { ArrowRight, Eye, Heart, Inbox, Sparkles, Star } from "lucide-react";
+import { ArrowRight, ArrowUpRight, Eye, Heart, Inbox, Sparkles, Star } from "lucide-react";
 import { DRAFT_STATUSES, type DraftStatus } from "@/db/schema";
 import { CollectButtons } from "@/components/CollectButtons";
-import { MediaGrid } from "@/components/MediaGrid";
 import { SourceBadge } from "@/components/SourceBadge";
 import { StatusButtons } from "@/components/StatusButtons";
 import { WriteButton } from "@/components/WriteButton";
@@ -212,7 +211,6 @@ export default async function DraftsBoard({ searchParams }: PageProps<"/">) {
               </header>
 
               <CardText original={d.originalText} texts={d.texts} langs={langs} view={view} />
-              <MediaGrid media={d.media} small />
 
               {(d.aiReason || d.metrics) && (
                 <div className="t-small space-y-1 text-muted">
@@ -236,6 +234,9 @@ export default async function DraftsBoard({ searchParams }: PageProps<"/">) {
               )}
 
               <footer className="mt-auto flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
+                <a href={d.sourceUrl} target="_blank" rel="noreferrer" className="btn btn-tertiary btn-sm">
+                  Open source <ArrowUpRight size={14} aria-hidden />
+                </a>
                 <StatusButtons draftId={d.id} status={d.status} />
                 {Object.keys(d.texts).length === 0 ? (
                   <div className="flex items-start gap-2">

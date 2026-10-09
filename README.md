@@ -10,7 +10,7 @@ You pick what's worth sharing. Claude finds the news and writes each post in �
 
 ![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)
-![SQLite](https://img.shields.io/badge/SQLite-local-003B57?logo=sqlite&logoColor=white)
+![Postgres](https://img.shields.io/badge/Postgres-Neon-4169E1?logo=postgresql&logoColor=white)
 ![Claude](https://img.shields.io/badge/AI-Claude-D97757)
 ![Languages](https://img.shields.io/badge/languages-6-blueviolet)
 ![Runs locally](https://img.shields.io/badge/runs-locally-success)
@@ -30,9 +30,9 @@ You pick what's worth sharing. Claude finds the news and writes each post in �
 - **📰 Free AI news discovery.** For every topic you track (OpenAI, Claude, open-source models, AI agents…), the app reads RSS feeds (company blogs, tech sites, Reddit, Hacker News) and runs a Claude web search. Claude keeps only real news, merges duplicates of the same story and skips what you already have.
 - **🌍 Six languages at once.** Every draft is written natively in 中文, 한국어, 日本語, Русский, Español and Português, adapted to how each audience talks about tech, not translated word for word. Turn languages on or off in Settings.
 - **✍️ An editor that helps.** Switch between language tabs, edit by hand, or ask the AI: *“make it shorter”*, *“explain the technical terms simply”*, *“mention it's free for students”*. You can ask in any language and the post stays in its own. Every change is saved as a version.
-- **📋 Built for posting by hand.** Each post has a character counter (500 by default, Threads' limit), **Copy text**, **Download media** (all images and videos as one zip) and **Mark posted**.
+- **📋 Built for posting by hand.** Each post has a character counter (500 by default, Threads' limit), **Copy text**, **Open source** and **Mark posted**. Follow the source link for any supporting images or videos.
 - **🧠 AI on your Claude subscription.** By default the AI runs through Claude Code on your own computer, so there's no per-token API bill.
-- **🔒 Local and private.** Drafts, settings and media stay in a SQLite file on your machine. Nothing is ever posted for you.
+- **🔒 Personal workspace.** Draft text, source links, annotations and settings live in Postgres. The hosted website is password-protected; research and AI jobs run on your Mac. Media files are never copied or stored.
 
 > [!NOTE]
 > Content Machine **never posts anything** on X, Threads or anywhere else. Publishing stays in your hands, which keeps your accounts safe from automation bans.
@@ -58,7 +58,7 @@ flowchart LR
     J --> L["🌍 Claude: write<br/>zh · ko · ja · ru · es · pt"]
     L --> D[("📋 Drafts board")]
     D --> E["✏️ Editor<br/>language tabs + AI rewrites"]
-    E --> Y["📋 Copy text + ⬇️ media"]
+    E --> Y["📋 Copy text + open source link"]
     Y --> T["📱 You post"]
 ```
 
@@ -68,7 +68,7 @@ flowchart LR
 | **2. Filter** | Duplicates, items already seen, items older than your limit and anything on your blocklist are dropped. |
 | **3. Judge** | Claude rates each item 1–10, matches it to a topic and groups items about the same story so you get one draft per story. Bookmarks are always kept, because you chose them. |
 | **4. Write** | For each kept item, Claude writes a native-sounding post in every enabled language, within your character limit and in your style. |
-| **5. Review & post** | Drafts appear on the board with the original, your languages, media and Claude's reason for picking it. Polish, copy, post and mark as posted. |
+| **5. Review & post** | Drafts appear on the board with the original text, source link, your languages and Claude's reason for picking it. Polish, copy, post and mark as posted. Open the source for media. |
 
 ---
 
@@ -78,10 +78,10 @@ flowchart LR
    Website (Vercel, or your Mac)          Worker (your Mac: `npm run dev`)
    board · editor · settings      ──▶ jobs ──▶  X API + Claude Code (subscription)
             │                                         │
-            └──────── Postgres (Neon) + Vercel Blob ◀─┘
+            └──────── Postgres (Neon) ◀─┘
 ```
 
-- **The website** shows and edits everything stored in **Postgres**. Pictures live in **Vercel Blob**. Host it on Vercel to open it from anywhere, including your phone, behind a password.
+- **The website** shows and edits everything stored in **Postgres**: text, source links, metrics, annotations and job status. Images and videos stay on the original posts. Host it on Vercel to open it from anywhere, including your phone, behind a password.
 - **The worker** runs on your own computer. When you press *Find*, *Write it*, *Ask AI*… the website queues a **job**, and the worker does it with X and **your local Claude Code**, then saves the result. If your computer is off, jobs simply wait.
 - `npm run dev` starts both the website and the worker locally.
 
@@ -94,7 +94,7 @@ flowchart LR
 | 🧠 AI (judging, writing in 6 languages, edits, web search) | **Included in your Claude plan.** Uses your plan's monthly Agent SDK credit |
 | 📰 RSS feeds | **Free** |
 | 🔖 X bookmark import | **~$0.001 per bookmark** from X API credits. New X developer accounts get $20 in free credits |
-| 🗄️ Postgres (Neon) + Vercel Blob + Vercel hosting | **Free tiers** are enough for one person |
+| 🗄️ Postgres (Neon) + Vercel hosting | **Free tiers** are enough for one person |
 | 🔎 X post search *(optional, off by default)* | ~$0.005 per post read. One run with 3 accounts and 30 posts per query is about $0.15–0.30 per topic |
 
 Importing 300 bookmarks a month costs about **$0.30**.
@@ -142,8 +142,7 @@ Put a Postgres connection string in `.env.local` as `DATABASE_URL=…`. With Ver
 npm i -g vercel && vercel login
 vercel link                                         # create/link a Vercel project
 vercel integration add neon                         # free Postgres, connected to the project
-vercel blob create-store content-machine-media --access public   # optional: picture storage
-vercel env pull .env.local                          # writes DATABASE_URL + BLOB_READ_WRITE_TOKEN (keeps your other keys)
+vercel env pull .env.local                          # pulls database config; back up local keys first
 ```
 
 Then create the tables:
@@ -163,7 +162,7 @@ Open **[http://127.0.0.1:3000](http://127.0.0.1:3000)**. In **Settings → Conne
 > [!TIP]
 > Always open the app at `127.0.0.1:3000`, not `localhost:3000`. X login only accepts the exact address you register.
 
-Without `BLOB_READ_WRITE_TOKEN`, pictures aren't copied: cards show them straight from the source instead.
+The app stores source links and text only. Open the original X, Threads or news post to view images and videos. No Blob store or media token is needed.
 
 ### 5. Put it online (optional)
 
@@ -265,7 +264,7 @@ When scoring new items, Claude ranks those that would make a similar post higher
    - Edit by hand, or use the quick buttons (*Make it shorter*, *Explain the technical terms simply*…) or your own request.
    - Missing a language? Press **✨ Write missing languages**.
    - Use **Version history** to go back to any earlier version of that language.
-7. **📋 Copy text**, **⬇️ Download media**, post it, and press **📤 Mark posted**.
+7. **📋 Copy text**, open the source if you need media, post it, and press **📤 Mark posted**.
 
 > [!TIP]
 > Credit the original author or outlet in your post (e.g. *“Source: OpenAI”*). The editor reminds you of the right name.
@@ -296,7 +295,6 @@ This keeps running while the terminal window is open.
 | `X_REDIRECT_URI` | `http://127.0.0.1:3000/api/x/callback` | Change it if you run on another port |
 | `X_BEARER_TOKEN` | – | For X post search (Bearer Token from your X app's *Keys and tokens*) |
 | `DATABASE_URL` | – | Postgres connection string (required) |
-| `BLOB_READ_WRITE_TOKEN` | – | Vercel Blob token for storing pictures (optional) |
 | `APP_PASSWORD` | – | Password for the website. Set it on Vercel; leave it empty locally for no login |
 
 ### In-app settings
@@ -336,9 +334,8 @@ content_machine/
 ├── src/
 │   ├── app/                    # Pages (Drafts, Editor, Settings) + API routes
 │   │   ├── api/x/              #   X login (OAuth) + callback
-│   │   ├── api/jobs/[id]/      #   Job status (polled by the page)
-│   │   └── api/drafts/[id]/    #   Media zip
-│   ├── components/             # Board buttons, multilingual editor, media grid…
+│   │   └── api/jobs/[id]/      #   Job status (polled by the page)
+│   ├── components/             # Board buttons, multilingual text editor, source links…
 │   ├── db/schema.ts            # Postgres tables (Drizzle ORM), incl. the jobs queue
 │   └── lib/
 │       ├── agents/scout.ts     # Collect → filter → judge → save
@@ -350,7 +347,7 @@ content_machine/
 │       ├── sources/            # RSS reader, Claude web search
 │       └── x/                  # X OAuth, bookmarks, optional search
 ├── scripts/                    # worker, scout-loop, x-check, import-sqlite
-├── drizzle/                    # Database migrations (applied automatically)
+├── drizzle/                    # Database migrations (apply with npm run db:migrate)
 ├── docs/PROJECT_SCHEME.md      # Design notes and decisions
 ```
 
@@ -446,7 +443,7 @@ The interface follows the type scale, spacing and components of Motorway's [The 
 
 ## 🧱 Built with
 
-[Next.js 16](https://nextjs.org) · [React 19](https://react.dev) · [Tailwind CSS 4](https://tailwindcss.com) · [Lucide icons](https://lucide.dev) · [Drizzle ORM](https://orm.drizzle.team) + SQLite · [Claude Code](https://code.claude.com/docs) · [AI SDK](https://ai-sdk.dev) · [X API v2](https://docs.x.com)
+[Next.js 16](https://nextjs.org) · [React 19](https://react.dev) · [Tailwind CSS 4](https://tailwindcss.com) · [Lucide icons](https://lucide.dev) · [Drizzle ORM](https://orm.drizzle.team) + Neon Postgres · [Claude Code](https://code.claude.com/docs) · [AI SDK](https://ai-sdk.dev) · [X API v2](https://docs.x.com)
 
 ## 📄 License
 

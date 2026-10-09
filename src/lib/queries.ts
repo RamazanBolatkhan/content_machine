@@ -5,7 +5,29 @@ import type { Draft, DraftStatus, DraftVersion, Job, JobKind, Settings, WorkerIn
 /** Latest text per language, e.g. { ja: "…", es: "…" }. */
 export type LatestTexts = Record<string, string>;
 
-export type DraftWithTexts = Draft & { texts: LatestTexts; topicName: string | null };
+export type TextDraft = Omit<Draft, "media">;
+export type DraftWithTexts = TextDraft & { texts: LatestTexts; topicName: string | null };
+
+// Avoid reading historical media metadata: the workspace uses text and source links.
+const draftColumns = {
+  id: schema.drafts.id,
+  sourceId: schema.drafts.sourceId,
+  source: schema.drafts.source,
+  sourceUrl: schema.drafts.sourceUrl,
+  sourceName: schema.drafts.sourceName,
+  authorHandle: schema.drafts.authorHandle,
+  topicId: schema.drafts.topicId,
+  originalText: schema.drafts.originalText,
+  postedAt: schema.drafts.postedAt,
+  metrics: schema.drafts.metrics,
+  score: schema.drafts.score,
+  aiReason: schema.drafts.aiReason,
+  storyKey: schema.drafts.storyKey,
+  matchesTop: schema.drafts.matchesTop,
+  status: schema.drafts.status,
+  runId: schema.drafts.runId,
+  createdAt: schema.drafts.createdAt,
+};
 
 const first = <T>(rows: T[]): T | undefined => rows[0];
 
@@ -47,7 +69,7 @@ export async function listDrafts(filter: { status?: DraftStatus; topicId?: numbe
         text: schema.draftVersions.text,
       })
       .from(schema.draftVersions),
-    db.select().from(schema.drafts).orderBy(desc(schema.drafts.score), desc(schema.drafts.id)),
+    db.select(draftColumns).from(schema.drafts).orderBy(desc(schema.drafts.score), desc(schema.drafts.id)),
   ]);
   const topics = new Map(topicRows.map((t) => [t.id, t.name]));
   const byDraft = new Map<number, Pick<DraftVersion, "id" | "lang" | "text">[]>();
@@ -67,8 +89,8 @@ export async function listDrafts(filter: { status?: DraftStatus; topicId?: numbe
 
 export async function getDraft(
   id: number,
-): Promise<{ draft: Draft; versions: DraftVersion[]; topicName: string | null } | null> {
-  const draft = first(await db.select().from(schema.drafts).where(eq(schema.drafts.id, id)));
+): Promise<{ draft: TextDraft; versions: DraftVersion[]; topicName: string | null } | null> {
+  const draft = first(await db.select(draftColumns).from(schema.drafts).where(eq(schema.drafts.id, id)));
   if (!draft) return null;
   const [versions, topic] = await Promise.all([
     db

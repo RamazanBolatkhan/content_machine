@@ -29,24 +29,7 @@ function stripHtml(html: string): string {
     .trim();
 }
 
-function firstImage(html: string): string | undefined {
-  return html.match(/<img[^>]+src=["']([^"']+)["']/i)?.[1];
-}
-
 type Node = Record<string, unknown>;
-
-function rssImage(item: Node): string | undefined {
-  for (const key of ["media:content", "media:thumbnail", "enclosure"]) {
-    for (const m of asArray(item[key] as Node | Node[])) {
-      const url = m?.["@url"] as string | undefined;
-      const type = (m?.["@type"] as string | undefined) ?? "";
-      if (url && (!type || type.startsWith("image"))) return url;
-    }
-  }
-  const group = item["media:group"] as Node | undefined;
-  const thumb = asArray(group?.["media:thumbnail"] as Node | Node[])[0];
-  return (thumb?.["@url"] as string | undefined) ?? undefined;
-}
 
 function parseDate(v: unknown): Date | null {
   const d = new Date(str(v));
@@ -75,7 +58,6 @@ export async function fetchFeed(feedUrl: string): Promise<NewsItem[]> {
         summary: stripHtml(html).slice(0, 1200),
         sourceName: feedName,
         publishedAt: parseDate(item.pubDate ?? item["dc:date"]),
-        imageUrl: rssImage(item) ?? firstImage(html),
       };
     });
   }
@@ -95,28 +77,9 @@ export async function fetchFeed(feedUrl: string): Promise<NewsItem[]> {
         summary: stripHtml(html).slice(0, 1200),
         sourceName: feedName,
         publishedAt: parseDate(entry.published ?? entry.updated),
-        imageUrl: rssImage(entry) ?? firstImage(html),
       };
     });
   }
 
   throw new Error("Not an RSS or Atom feed");
-}
-
-/** og:image of an article, for news found without a picture. */
-export async function fetchOgImage(pageUrl: string): Promise<string | undefined> {
-  try {
-    const res = await fetch(pageUrl, {
-      headers: { "User-Agent": "Mozilla/5.0 (compatible; ContentMachine/1.0)" },
-      signal: AbortSignal.timeout(10_000),
-    });
-    if (!res.ok) return undefined;
-    const html = (await res.text()).slice(0, 300_000);
-    const match =
-      html.match(/<meta[^>]+property=["']og:image(?::url)?["'][^>]+content=["']([^"']+)["']/i) ??
-      html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image(?::url)?["']/i);
-    return match ? new URL(match[1].replace(/&amp;/g, "&"), pageUrl).toString() : undefined;
-  } catch {
-    return undefined;
-  }
 }

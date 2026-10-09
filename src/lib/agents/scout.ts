@@ -1,13 +1,12 @@
 import { z } from "zod";
 import { desc, eq, gte, inArray } from "drizzle-orm";
 import { db, schema } from "@/db";
-import { RUN_KINDS, type Topic, type MediaItem, type PostMetrics, type Settings, type SourceType } from "@/db/schema";
+import { RUN_KINDS, type Topic, type PostMetrics, type Settings, type SourceType } from "@/db/schema";
 import { aiObject } from "@/lib/ai";
 import { enabledLangs } from "@/lib/languages";
 import { referenceBlock, similarSearchThemes } from "./reference";
 import { writePosts } from "./writer";
-import { downloadMedia } from "@/lib/media";
-import { fetchFeed, fetchOgImage } from "@/lib/sources/rss";
+import { fetchFeed } from "@/lib/sources/rss";
 import type { NewsItem } from "@/lib/sources/types";
 import { searchTopicNews, searchWebNews } from "@/lib/sources/web-search";
 import { getSettings } from "@/lib/queries";
@@ -35,7 +34,6 @@ type Candidate = {
   text: string;
   postedAt: Date | null;
   metrics: PostMetrics | null;
-  media: Omit<MediaItem, "file">[];
   topicId: number | null;
 };
 
@@ -51,7 +49,6 @@ function fromXPost(post: XPost, source: SourceType, topicId: number | null): Can
     text: post.text,
     postedAt: post.createdAt,
     metrics: post.metrics,
-    media: post.media,
     topicId,
   };
 }
@@ -81,7 +78,6 @@ function fromNews(item: NewsItem, source: SourceType, topicId: number | null): C
     text: [item.title, item.summary].filter(Boolean).join("\n\n"),
     postedAt: item.publishedAt,
     metrics: null,
-    media: item.imageUrl ? [{ type: "photo", remoteUrl: item.imageUrl }] : [],
     topicId,
   };
 }
@@ -273,7 +269,6 @@ async function judge(
                 hoursOld: c.postedAt ? Math.round((Date.now() - c.postedAt.getTime()) / 3600_000) : null,
               },
             }),
-            hasMedia: c.media.map((m) => m.type),
             text: c.text.slice(0, 2000),
           })),
           null,
@@ -350,16 +345,6 @@ async function saveDrafts(
     }
     const recommended = opts.curated || j.keep;
 
-    // Only fetch / download pictures for items worth posting
-    let media: MediaItem[] = c.media.map((m) => ({ ...m, file: null }));
-    if (recommended) {
-      let remote = c.media;
-      if (!remote.length && (c.source === "rss" || c.source === "web")) {
-        const image = await fetchOgImage(c.url);
-        if (image) remote = [{ type: "photo", remoteUrl: image }];
-      }
-      media = await downloadMedia(c.sourceId, remote);
-    }
     const topicId = c.topicId ?? (j.topicId != null && topicIds.has(j.topicId) ? j.topicId : null);
 
     return db.transaction(async (tx) => {
@@ -379,7 +364,6 @@ async function saveDrafts(
           matchesTop: j.matchesTop,
           aiReason: j.reason,
           storyKey: j.storyKey,
-          media,
           status: recommended ? "new" : "rejected",
           runId: opts.runId,
         })

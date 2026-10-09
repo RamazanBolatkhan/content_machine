@@ -1,6 +1,6 @@
 # Content Machine — Project Scheme
 
-> Status: **v3 built: AI news in 6 languages** (bookmarks + free news, AI on the Claude subscription). Sections 13 (sources, AI, pipeline) + 14 (AI-news + multilingual changes) are the current design. Sections 1–12 are history.
+> Status: **Hosted personal text-first workspace, Mac worker, Neon Postgres.** Six supported languages, enabled in Settings. Sections 19–21 describe the current architecture and decisions; earlier sections record its evolution.
 > Last updated: 2026-10-06
 
 ## 1. The idea in one paragraph
@@ -353,3 +353,12 @@ Each AI or hand edit creates a new version, so changes can be undone.
 - Every X post (keyword search, accounts to watch, "Find like my top posts") must reach **Min likes** (and Min views when set).
 - `scorePost` no longer gives watched accounts a bonus. Improve with AI has no follower minimum and asks Claude for accounts whose posts get high engagement, any size.
 - The judge sees likes, reposts, replies, views and hours old, and must rate low-engagement X posts ≤4.
+
+## 21. Text-first source links, no media copies (2026-10-08)
+
+- Keep the password-protected Vercel website, Neon Postgres and local Mac worker.
+- Store source URLs, original text, draft versions, engagement metrics and annotations. Threads reference posts already follow this model.
+- Images and videos stay on the source X/Threads/news post. The board and editor offer **Open source**; there are no media previews or ZIP downloads.
+- X requests omit media fields/expansions. RSS parsing ignores image URLs. The scout no longer fetches article images or downloads/uploads media, and the SQLite importer imports text/source links only.
+- Vercel Blob and JSZip are no longer dependencies. Existing Blob objects and legacy database media values are preserved; clearing them is a separate cleanup. The existing `drafts.media` column defaults to `[]` on new inserts for compatibility, with no schema migration required.
+- X ranking stays based on weighted engagement divided by post age decay (`scorePost`), with minimum likes/views filters and Claude's topic/audience judgement. It needs no file storage.
