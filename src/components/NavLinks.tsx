@@ -11,7 +11,7 @@ const LINKS = [
 export function NavLinks() {
   const pathname = usePathname();
   return (
-    <div className="flex items-stretch gap-6 self-stretch">
+    <div className="workspace-nav" data-active={LINKS.findIndex((link) => link.match(pathname))}>
       {LINKS.map((l) => {
         const active = l.match(pathname);
         return (
@@ -19,8 +19,8 @@ export function NavLinks() {
             key={l.href}
             href={l.href}
             aria-current={active ? "page" : undefined}
-            className={`t-small flex items-center border-b-2 font-semibold transition-colors ${
-              active ? "border-fg text-fg" : "border-transparent text-muted hover:text-fg"
+            className={`t-small flex items-center justify-center font-semibold transition-colors ${
+              active ? "text-fg" : "text-muted hover:text-fg"
             }`}
           >
             {l.label}

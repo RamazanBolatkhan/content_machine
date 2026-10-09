@@ -19,11 +19,11 @@ export function CollectButtons({
   const [topicId, setTopicId] = useState("");
 
   return (
-    <div className="flex w-full flex-col gap-4 md:w-auto md:items-end">
-      <div className="flex flex-wrap items-center gap-2 md:justify-end">
+    <div className="flex w-full flex-col gap-4">
+      <div className="flex flex-wrap items-center gap-2">
         {xConnected ? (
           <button
-            className="btn btn-secondary"
+            className="btn btn-ghost"
             disabled={busy}
             onClick={() => run("bookmarks")}
             title="Import posts you bookmarked on X"
@@ -33,7 +33,7 @@ export function CollectButtons({
         ) : (
           <Link
             href="/settings#connections"
-            className="btn btn-secondary"
+            className="btn btn-ghost"
             title="Connect your X account to import bookmarks"
           >
             <Bookmark size={16} aria-hidden /> Connect X
@@ -41,7 +41,7 @@ export function CollectButtons({
         )}
         {hasTopPosts ? (
           <button
-            className="btn btn-secondary"
+            className="btn btn-ghost"
             disabled={busy}
             onClick={() => run("similar")}
             title="Search only for items like your top Threads posts"
@@ -61,13 +61,13 @@ export function CollectButtons({
             <span className="t-caption font-normal text-muted">Add your top Threads posts first →</span>
           </Link>
         )}
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex w-full flex-wrap items-center gap-2 border-t border-line pt-3 lg:ml-auto lg:w-auto lg:border-0 lg:pt-0">
           <label className="sr-only" htmlFor="collect-topic">
             Topic to search
           </label>
           <select
             id="collect-topic"
-            className="input w-auto rounded-full"
+            className="input !w-auto max-w-full !rounded-xl !text-sm"
             style={{ minHeight: 40 }}
             value={topicId}
             onChange={(e) => setTopicId(e.target.value)}
@@ -92,7 +92,7 @@ export function CollectButtons({
       </div>
 
       {busy && (
-        <p className="t-small flex items-center gap-2 text-muted" role="status">
+        <p className="feedback t-small flex flex-wrap items-center gap-2 rounded-xl bg-surface px-4 py-3 text-muted" role="status">
           <LoaderCircle size={16} className="animate-spin" aria-hidden />
           {jobLabel(state, "Searching and scoring…")}
           {state.workerOnline && " (usually 1–3 min per topic)"}

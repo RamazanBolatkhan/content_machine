@@ -19,8 +19,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`${dmSans.variable} antialiased`}>
       <body className="min-h-screen bg-bg font-sans text-fg">
-        <header className="sticky top-0 z-10 border-b border-line bg-bg">
-          <nav className="mx-auto flex h-16 max-w-6xl items-center gap-10 px-4 md:px-6">
+        <header className="workspace-header sticky top-0 z-10 border-b border-line">
+          <nav className="mx-auto flex min-h-20 max-w-6xl flex-wrap items-center justify-between gap-3 py-3 px-4 md:px-6">
             <Link href="/" className="t-h6 flex items-center gap-2.5" aria-label="Content Machine, home">
               <LogoMark size={32} />
               <span aria-hidden>Content Machine</span>
@@ -31,7 +31,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <Suspense fallback={null}>
           <WorkerBanner />
         </Suspense>
-        <main className="mx-auto max-w-6xl px-4 py-8 md:px-6 md:py-10">{children}</main>
+        <main className="mx-auto max-w-6xl px-4 py-8 md:px-6 md:py-12">{children}</main>
       </body>
     </html>
   );
