@@ -5,6 +5,7 @@ import { LogoMark } from "@/components/Logo";
 import { NavLinks } from "@/components/NavLinks";
 import { Suspense } from "react";
 import { WorkerBanner } from "@/components/WorkerBanner";
+import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 
 // Fallback for "New Transport" (see globals.css)
@@ -32,6 +33,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           <WorkerBanner />
         </Suspense>
         <main className="mx-auto max-w-6xl px-4 py-8 md:px-6 md:py-10">{children}</main>
+        <Analytics />
       </body>
     </html>
   );
